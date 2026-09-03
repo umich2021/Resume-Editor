@@ -100,7 +100,14 @@ select{appearance:none; background-image:linear-gradient(45deg,transparent 50%,v
   background:var(--panel);
   border-bottom:1px solid var(--line);
 }
-.brand{display:flex; align-items:center; gap:9px; margin-right:auto}
+.brand{display:flex; align-items:center; gap:9px; margin-right:12px}
+.docchip{display:flex; align-items:center; gap:6px; margin-right:auto; max-width:230px;
+  padding:5px 9px; border:1px solid var(--line); border-radius:7px; background:var(--card);
+  font-size:12px; font-weight:500; color:var(--ink)}
+.docchip:hover{border-color:var(--faint)}
+.docchip svg{width:13px; height:13px; flex:none; color:var(--muted)}
+.docchip .cx{width:11px; height:11px}
+.docchip span{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .mark{
   width:22px; height:22px; border-radius:5px; flex:none;
   background:var(--accent); position:relative;
@@ -156,6 +163,19 @@ select{appearance:none; background-image:linear-gradient(45deg,transparent 50%,v
 .sect-name-row{display:flex; gap:7px; align-items:center}
 .sect-name-row input{font-weight:600; letter-spacing:.08em; text-transform:uppercase; font-size:11px}
 .sect-name-row select{width:auto; font-size:11px; flex:none; padding:5px 24px 5px 8px}
+.block.sec-off > header h2{opacity:.4}
+.block.sec-off > header .count{color:var(--danger)}
+
+/* include / exclude checkbox */
+.chk{appearance:none; -webkit-appearance:none; width:15px; height:15px; flex:none; margin:0; cursor:pointer;
+  border:1.5px solid var(--faint); border-radius:4px; background:var(--field); position:relative}
+.chk:checked{background:var(--accent); border-color:var(--accent)}
+.chk:checked::after{content:""; position:absolute; left:4px; top:1px; width:3.5px; height:7.5px;
+  border:solid var(--accent-ink); border-width:0 2px 2px 0; transform:rotate(45deg)}
+.chk:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.linkbtn{background:none; border:none; padding:2px 0; font:inherit; font-size:10.5px; color:var(--accent);
+  text-decoration:underline; text-underline-offset:2px; cursor:pointer; text-transform:none; letter-spacing:0}
+.linkbtn:hover{opacity:.8}
 
 .grid{display:grid; grid-template-columns:1fr; gap:10px}
 .f{display:flex; flex-direction:column; gap:4px}
@@ -168,8 +188,14 @@ select{appearance:none; background-image:linear-gradient(45deg,transparent 50%,v
 
 .entry{border:1px solid var(--line-soft); border-radius:8px; padding:11px; background:var(--panel); display:flex; flex-direction:column; gap:10px}
 .entry.focused{border-color:var(--accent); box-shadow:inset 3px 0 0 var(--maize)}
-.entry-head{display:flex; align-items:center; gap:6px}
+.entry.off{opacity:.52}
+.entry.off .duo, .entry.off .bullets, .entry.off .bullbar{filter:grayscale(.5)}
+.entry-head{display:flex; align-items:center; gap:7px}
 .entry-head .tag{font-family:"IBM Plex Mono",monospace; font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--faint); flex:1}
+.entry-head .exflag{font-family:"IBM Plex Mono",monospace; font-size:9px; letter-spacing:.06em; text-transform:uppercase; color:var(--danger)}
+.bullbar{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.bullbar > label{font-family:"IBM Plex Mono",monospace; font-size:9.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted)}
+.bullbar .tot{font-size:10px; color:var(--faint); font-family:"IBM Plex Mono",monospace}
 .mini{
   width:24px; height:24px; border-radius:5px; display:inline-flex; align-items:center; justify-content:center;
   border:1px solid var(--line); background:var(--card); color:var(--muted);
@@ -180,9 +206,10 @@ select{appearance:none; background-image:linear-gradient(45deg,transparent 50%,v
 .mini svg{width:12px; height:12px}
 
 .bullets{display:flex; flex-direction:column; gap:6px}
-.bul{display:flex; gap:6px; align-items:flex-start}
-.bul .dot{margin-top:9px; width:4px; height:4px; border-radius:50%; background:var(--faint); flex:none}
+.bul{display:flex; gap:7px; align-items:flex-start}
+.bul .chk{margin-top:7px}
 .bul textarea{font-size:12px}
+.bul.off textarea{opacity:.5; text-decoration:line-through}
 .bul-ctl{display:flex; flex-direction:column; gap:3px}
 .bul-ctl .mini{width:22px; height:18px}
 
@@ -291,13 +318,25 @@ select{appearance:none; background-image:linear-gradient(45deg,transparent 50%,v
 .msg[hidden]{display:none}
 .dialog-foot{display:flex; justify-content:flex-end; gap:8px; margin-top:18px}
 
+.docs-list{display:flex; flex-direction:column; gap:7px}
+.docrow{display:flex; align-items:center; gap:10px; padding:9px 11px; border:1px solid var(--line); border-radius:9px; background:var(--panel)}
+.docrow.cur{border-color:var(--accent); background:var(--accent-soft)}
+.docrow .pick{flex:1; min-width:0; text-align:left; display:flex; flex-direction:column; gap:1px}
+.docrow .pick b{font-size:12.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.docrow .pick small{font-size:10.5px; color:var(--faint)}
+.docrow.cur .pick small{color:var(--accent)}
+.docrow .pick input{font-size:12.5px; font-weight:600; padding:3px 5px}
+.docrow .acts{display:flex; gap:4px; flex:none}
+
 @media(max-width:900px){
   .workspace{grid-template-columns:1fr}
   .editor,.preview{display:none}
   body[data-view="edit"] .editor{display:block}
   body[data-view="preview"] .preview{display:flex}
   .viewtoggle{display:flex}
-  .brand span{display:none}
+  .brand b{display:none}
+  .brand{margin-right:8px}
+  .docchip{max-width:44vw}
   .btn .lbl{display:none}
   .btn{padding:6px 9px}
   .preview{padding:16px}

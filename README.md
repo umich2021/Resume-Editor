@@ -1,9 +1,13 @@
 # Résumé Studio
 
 A résumé **editor and creator** built around the University of Michigan Ross School of
-Business résumé format. Import an existing résumé, edit every section in a live editor,
-and export a clean copy to PDF, HTML, Markdown, plain text, or a re-importable JSON
-backup. Everything runs in the browser — no accounts, no server, no upload.
+Business résumé format. Keep one living master document with every experience, then
+toggle sections and bullet points on or off to produce a tailored résumé for each role.
+Export to PDF, HTML, Markdown, plain text, or a re-importable JSON backup.
+
+**Everything runs in your browser.** No account, no server, no upload, no analytics — your
+résumé data is written only to this browser's `localStorage` and never leaves the page.
+Run it locally or host the static files anywhere; either way the privacy model is the same.
 
 ## Why I built this
 
@@ -17,24 +21,42 @@ backup. Everything runs in the browser — no accounts, no server, no upload.
 
 - **Live two-pane editor** — forms on the left, a black-on-white letter-size sheet on the
   right that updates as you type.
+- **Include / exclude anything** — a checkbox on every section, every entry, and every
+  bullet point controls whether it appears on the résumé. Uncheck what a given role
+  doesn't need; the item stays in your document, just hidden from the output. This is the
+  core workflow: one master résumé, many tailored views.
+- **My résumés** — keep multiple named versions (Base, VC Analyst, Consulting, …).
+  Duplicate one, retitle it, then toggle items for that role. Switch between them from the
+  chip in the toolbar. All stored locally.
 - **Import**
   - *Paste text* — paste any résumé; it extracts your name, contact details, education,
-    and experience into editable sections.
+    and experience into editable sections. Paste a `.json` backup to restore a résumé exactly.
   - *Upload PDF* — text is read in the browser with [pdf.js](https://mozilla.github.io/pdf.js/),
     including a pass at reconstructing the Ross template's two-column layout. Scanned /
     image-only PDFs won't have selectable text — paste instead.
 - **Build from scratch** — start from a blank Education / Experience / Skills outline.
 - **Sections as separators** — each section is a titled, ruled heading with its entries
   nested beneath; year markers sit in a bold left rail, matching the Ross template.
-- **Add / reorder / delete** entries and bullet points; add custom sections and skills lists.
+- **Add / reorder / delete** entries and bullet points; collapse an entry's bullets while
+  editing; add custom sections and skills lists.
 - **Personal website toggle** — off by default; flip it on to show a portfolio link on
-  its own line (kept even when hidden).
+  its own bold line (kept even when hidden).
 - **Export** — `.pdf` (generated with [jsPDF](https://github.com/parallax/jsPDF), ready to
-  send), `.html` (self-contained, print-ready), `.txt`, `.md`, `.json`. Or use **Print →
-  Save as PDF** for the browser's own renderer.
+  send), `.html` (self-contained, print-ready), `.txt`, `.md`, `.json`. Every export
+  reflects the current show/hide state. Or use **Print → Save as PDF** for the browser's
+  own renderer.
 - **Autosave** to `localStorage`; light / dark app theme (the résumé sheet is always
   black on white).
 - Preloaded with a sample résumé so the first screen shows what the tool does.
+
+## Privacy
+
+The app is a set of static files with no backend. It makes no network requests except to
+load fonts (Google Fonts) and, only when you import or export a PDF, the pdf.js / jsPDF
+libraries from a CDN. Your résumé content is saved to `localStorage` in the browser you're
+using and is never transmitted anywhere. Sharing a recruiter a link to a hosted copy shares
+the *app*, not your data. To move a résumé between devices, export a `.json` and import it
+on the other side.
 
 ## Run it
 
@@ -62,8 +84,12 @@ the repo root.
 ```
 index.html    markup + <head> (fonts, CDN scripts)
 styles.css    app UI + résumé sheet styling, light/dark tokens, print rules
-app.js        state model, editor + preview rendering, résumé parser, exporters
+app.js        résumé store (named versions), state model + normalizer,
+              editor + preview rendering, résumé/PDF/JSON parser, exporters
 ```
+
+`index.html`, `styles.css` and `app.js` are generated from a single working file; edit
+them directly — there's no build step.
 
 No framework. The only dependencies are pdf.js and jsPDF, loaded from a CDN and used only
 when you import a PDF or export one.
@@ -71,8 +97,8 @@ when you import a PDF or export one.
 ## Ideas / roadmap
 
 - Font selection for the résumé sheet
-- Multiple saved résumés / versions
 - One-page fit warnings
+- Reorder résumés in the "My résumés" list
 - More import formats (DOCX)
 
 ## License

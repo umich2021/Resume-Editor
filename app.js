@@ -2,7 +2,8 @@
 const $ = s => document.querySelector(s);
 const uid = () => Math.random().toString(36).slice(2, 9);
 const clone = o => JSON.parse(JSON.stringify(o));
-const KEY = "resume-studio:v1";
+const STORE_KEY = "resume-studio:store";   // { v, currentId, order:[id], docs:{ id:{id,name,updated,data} } }
+const OLD_KEY = "resume-studio:v1";        // pre-versioning single résumé
 const THEME_KEY = "resume-studio:theme";
 
 /* ---------------- default résumé (extracted from HealthCareResume.pdf) ---------------- */
@@ -85,46 +86,172 @@ const DEFAULT = {
   ]
 };
 
-const emptyEntry = () => ({ id: uid(), org:"", location:"", date:"", subtitle:"", extra:"", bullets:[""] });
+const mkBullet = t => ({ text: t || "", on: true });
+const emptyEntry = () => ({ id: uid(), org:"", location:"", date:"", subtitle:"", extra:"", on:true, bullets:[mkBullet("")] });
 const BLANK = {
   name:"", email:"", phone:"", location:"", links:[],
   site:{ label:"Personal projects", url:"", show:false },
   sections:[
-    { id: uid(), title:"EDUCATION", kind:"entries", entries:[emptyEntry()], bullets:[] },
-    { id: uid(), title:"EXPERIENCE", kind:"entries", entries:[emptyEntry()], bullets:[] },
-    { id: uid(), title:"SKILLS", kind:"list", entries:[], bullets:[""] }
+    { id: uid(), title:"EDUCATION", kind:"entries", on:true, entries:[emptyEntry()], bullets:[] },
+    { id: uid(), title:"EXPERIENCE", kind:"entries", on:true, entries:[emptyEntry()], bullets:[] },
+    { id: uid(), title:"SKILLS", kind:"list", on:true, entries:[], bullets:[mkBullet("")] }
   ]
 };
 
-function migrate(s){
-  if(!s || typeof s !== "object") return clone(DEFAULT);
+// bring any stored / imported / default shape up to the current model:
+// every section + entry + bullet carries an `on` flag (include in the résumé); bullets are {text,on}
+function normalizeState(s){
+  if(!s || typeof s !== "object") s = clone(DEFAULT);
   if(!s.site || typeof s.site !== "object") s.site = { label:"Personal projects", url:"", show:false };
   if(typeof s.site.show !== "boolean") s.site.show = false;
+  s.name = s.name || ""; s.email = s.email || ""; s.phone = s.phone || ""; s.location = s.location || "";
   if(!Array.isArray(s.links)) s.links = [];
-  if(!Array.isArray(s.sections)) s.sections = clone(DEFAULT.sections);
+  if(!Array.isArray(s.sections) || !s.sections.length) s.sections = clone(DEFAULT.sections);
+  const fixB = arr => (Array.isArray(arr) ? arr : []).map(b =>
+    typeof b === "string" ? mkBullet(b) : { text: (b && b.text) || "", on: !(b && b.on === false) });
+  s.sections.forEach(sec => {
+    if(!sec.id) sec.id = uid();
+    sec.title = sec.title || "SECTION";
+    sec.kind = sec.kind === "list" ? "list" : "entries";
+    sec.on = !(sec.on === false);
+    sec.entries = Array.isArray(sec.entries) ? sec.entries : [];
+    sec.bullets = fixB(sec.bullets);
+    sec.entries.forEach(e => {
+      if(!e.id) e.id = uid();
+      e.on = !(e.on === false);
+      ["org","location","date","subtitle","extra"].forEach(k => e[k] = e[k] || "");
+      e.bullets = fixB(e.bullets);
+    });
+  });
   return s;
 }
 
-/* ---------------- state ---------------- */
-let state = migrate(load()) || clone(DEFAULT);
-let collapsed = {};        // block id -> bool
+/* ---------------- résumé store (multiple named versions, all local) ---------------- */
+function loadStore(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){
+      const s = JSON.parse(raw);
+      if(s && s.docs && s.currentId && s.docs[s.currentId]){
+        if(!Array.isArray(s.order) || !s.order.length) s.order = Object.keys(s.docs);
+        return s;
+      }
+    }
+  }catch(e){}
+  let seed = null;
+  try{ const o = localStorage.getItem(OLD_KEY); if(o) seed = JSON.parse(o); }catch(e){}
+  const id = uid();
+  return { v:2, currentId:id, order:[id],
+    docs:{ [id]:{ id, name:"My résumé", updated:Date.now(), data: seed || clone(DEFAULT) } } };
+}
+function persistStore(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(store)); }catch(e){} }
+function curDoc(){ return store.docs[store.currentId]; }
+
+let store = loadStore();
+let state = normalizeState(curDoc().data);
+curDoc().data = state;
+
+let collapsed = {};        // block id -> bool  (section blocks + "bul:<entryId>" bullet groups)
 let focusEntry = null;     // entry id being edited
 let focusRequest = null;   // data-fid to focus after editor render
 
-function load(){
-  try{ const raw = localStorage.getItem(KEY); return raw ? JSON.parse(raw) : null; }
-  catch(e){ return null; }
-}
 let saveTimer;
 function save(now){
   clearTimeout(saveTimer);
   const flag = $("#saveflag");
   flag.classList.add("busy"); flag.querySelector("span").textContent = "Saving…";
   const doWrite = () => {
-    try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){}
+    const d = curDoc();
+    if(d){ d.data = state; d.updated = Date.now(); }
+    persistStore();
     flag.classList.remove("busy"); flag.querySelector("span").textContent = "Saved";
+    updateDocLabel();
   };
   if(now) doWrite(); else saveTimer = setTimeout(doWrite, 500);
+}
+
+function updateDocLabel(){
+  const el = $("#docLabel");
+  if(el) el.textContent = curDoc() ? curDoc().name : "";
+}
+function switchDoc(id){
+  if(!store.docs[id] || id === store.currentId) return;
+  save(true);
+  store.currentId = id;
+  state = normalizeState(store.docs[id].data);
+  store.docs[id].data = state;
+  collapsed = {}; focusEntry = null;
+  persistStore(); render(); updateDocLabel(); renderDocs();
+  toast('Now editing "' + store.docs[id].name + '"');
+}
+function addDoc(name, data){
+  const id = uid();
+  store.docs[id] = { id, name: name || "Untitled", updated: Date.now(), data: normalizeState(data || clone(BLANK)) };
+  store.order.push(id);
+  return id;
+}
+function newDoc(){
+  const id = addDoc("Résumé " + (store.order.length + 1), clone(BLANK));
+  persistStore(); switchDoc(id);
+}
+function duplicateDoc(id){
+  const src = store.docs[id]; if(!src) return;
+  const nid = addDoc(src.name.replace(/ copy( \d+)?$/i, "") + " copy", clone(src.data));
+  persistStore(); switchDoc(nid);
+}
+function renameDoc(id, name){
+  if(!store.docs[id]) return;
+  store.docs[id].name = (name || "").trim() || store.docs[id].name;
+  persistStore(); updateDocLabel(); renderDocs();
+}
+function deleteDoc(id){
+  if(!store.docs[id] || store.order.length <= 1) return;
+  if(!confirm('Delete "' + store.docs[id].name + '"? This can\'t be undone.')) return;
+  delete store.docs[id];
+  store.order = store.order.filter(x => x !== id);
+  if(store.currentId === id){
+    store.currentId = store.order[0];
+    state = normalizeState(curDoc().data); curDoc().data = state;
+    collapsed = {}; focusEntry = null; render();
+  }
+  persistStore(); updateDocLabel(); renderDocs();
+}
+function timeAgo(ts){
+  const s = Math.max(1, (Date.now() - ts) / 1000);
+  if(s < 60) return "just now";
+  if(s < 3600) return Math.floor(s / 60) + " min ago";
+  if(s < 86400) return Math.floor(s / 3600) + " hr ago";
+  if(s < 604800) return Math.floor(s / 86400) + " d ago";
+  return new Date(ts).toLocaleDateString();
+}
+function renderDocs(){
+  const list = $("#docsList");
+  if(!list) return;
+  list.innerHTML = "";
+  store.order.filter(id => store.docs[id]).forEach(id => {
+    const d = store.docs[id];
+    const cur = id === store.currentId;
+    const row = el("div", { class:"docrow" + (cur ? " cur" : "") });
+    const nameEl = el("b", { text: d.name });
+    const pick = el("button", { class:"pick", type:"button", onclick: () => { if(!cur){ switchDoc(id); } } },
+      nameEl, el("small", { text: (cur ? "editing now · " : "") + "saved " + timeAgo(d.updated) }));
+    const rename = el("button", { class:"mini", title:"Rename", onclick: () => {
+      const inp = el("input", { type:"text", value: d.name });
+      pick.replaceChild(inp, pick.firstChild);
+      inp.focus(); inp.select();
+      let done = false;
+      const commit = () => { if(done) return; done = true; renameDoc(id, inp.value); };
+      inp.addEventListener("keydown", e => {
+        if(e.key === "Enter"){ e.preventDefault(); commit(); }
+        else if(e.key === "Escape"){ done = true; renderDocs(); }
+      });
+      inp.addEventListener("blur", commit);
+    }}, ico(I.pen));
+    const dup = el("button", { class:"mini", title:"Duplicate (for a role-specific version)", onclick: () => duplicateDoc(id) }, ico(I.copy));
+    const del = el("button", { class:"mini del", title:"Delete", disabled: store.order.length <= 1, onclick: () => deleteDoc(id) }, ico(I.del));
+    row.append(pick, el("div", { class:"acts" }, rename, dup, del));
+    list.append(row);
+  });
 }
 
 /* ---------------- dom helper ---------------- */
@@ -145,12 +272,20 @@ function el(tag, props, ...kids){
   return n;
 }
 const ico = d => el("span", { html:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>` });
+function checkbox(on, onToggle, title){
+  const c = el("input", { type:"checkbox", class:"chk", title: title || "Include in the résumé" });
+  c.checked = on !== false;
+  c.addEventListener("change", () => onToggle(c.checked));
+  return c;
+}
 const I = {
   up:'<path d="M12 19V5M6 11l6-6 6 6"/>',
   down:'<path d="M12 5v14M6 13l6 6 6-6"/>',
   del:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
-  chev:'<path d="M6 9l6 6 6-6"/>'
+  chev:'<path d="M6 9l6 6 6-6"/>',
+  pen:'<path d="M4 20h4L18.5 9.5a2.12 2.12 0 0 0-3-3L5 17v3z"/><path d="M13.5 6.5l3 3"/>',
+  copy:'<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/>'
 };
 
 /* ---------------- editor render ---------------- */
@@ -193,13 +328,15 @@ function moveCtl(list, idx, after){
 
 function renderEntry(sec, entry, idx){
   const edu = /EDUC/i.test(sec.title);
-  const card = el("div", { class: "entry" + (focusEntry === entry.id ? " focused" : "") });
+  const card = el("div", { class: "entry" + (focusEntry === entry.id ? " focused" : "") + (entry.on === false ? " off" : "") });
   card.addEventListener("focusin", () => {
     if(focusEntry !== entry.id){ focusEntry = entry.id; document.querySelectorAll(".entry").forEach(e => e.classList.remove("focused")); card.classList.add("focused"); }
   });
 
   const head = el("div", { class:"entry-head" },
+    checkbox(entry.on, v => { entry.on = v; render(); save(); }, "Include this entry in the résumé"),
     el("span", { class:"tag", text: edu ? "School" : "Role" }),
+    entry.on === false ? el("span", { class:"exflag", text:"hidden" }) : null,
     moveCtl(sec.entries, idx, () => { render(); save(); })
   );
 
@@ -209,28 +346,54 @@ function renderEntry(sec, entry, idx){
   const sub = fieldText(edu ? "Program / school" : "Title", entry.subtitle, v => entry.subtitle = v);
   const extra = fieldText(edu ? "Degree / detail" : "Detail (optional)", entry.extra, v => entry.extra = v);
 
-  const bullets = el("div", { class:"bullets" });
-  entry.bullets.forEach((b, bi) => bullets.append(renderBullet(entry.bullets, bi, () => { render(); save(); })));
-  const addBul = el("button", { class:"add", onclick: () => {
-    entry.bullets.push(""); focusRequest = "b-" + entry.id + "-" + (entry.bullets.length - 1);
-    render(); save();
-  }}, ico(I.plus), "Add bullet");
+  const ckey = "bul:" + entry.id;
+  const bcol = !!collapsed[ckey];
+  const shown = entry.bullets.filter(b => b.on !== false).length;
+  const bar = el("div", { class:"bullbar" },
+    el("label", { text:"Bullet points" }),
+    el("span", {},
+      el("span", { class:"tot", text: `${shown}/${entry.bullets.length} shown  ` }),
+      entry.bullets.length ? el("button", { class:"linkbtn", type:"button",
+        onclick: () => { collapsed[ckey] = !bcol; render(); } }, bcol ? "Show bullets" : "Hide bullets") : null
+    )
+  );
+  card.append(head, el("div", { class:"duo" }, org, loc), el("div", { class:"duo" }, date, sub), extra, bar);
 
-  card.append(head, el("div", { class:"duo" }, org, loc), el("div", { class:"duo" }, date, sub), extra,
-    el("div", { class:"f" }, el("label", { text:"Bullet points" }), bullets), el("div", { class:"addline" }, addBul));
+  if(!bcol){
+    const bullets = el("div", { class:"bullets" });
+    entry.bullets.forEach((b, bi) => bullets.append(renderBullet(entry.bullets, bi, () => { render(); save(); })));
+    const addBul = el("button", { class:"add", onclick: () => {
+      entry.bullets.push(mkBullet("")); focusRequest = mkBid(entry.bullets, entry.bullets.length - 1);
+      render(); save();
+    }}, ico(I.plus), "Add bullet");
+    card.append(bullets, el("div", { class:"addline" }, addBul));
+  }
   return card;
 }
 
 function renderBullet(list, i, after){
+  const b = list[i];
   const ta = el("textarea", { rows:2, "data-fid": mkBid(list, i) });
-  ta.value = list[i];
-  bindInput(ta, v => list[i] = v);
+  ta.value = b.text;
+  bindInput(ta, v => b.text = v);
+  const row = el("div", { class:"bul" + (b.on === false ? " off" : "") });
+  const chk = checkbox(b.on, v => { b.on = v; row.classList.toggle("off", !v); renderPreview(); save(); updateBarCounts(row); }, "Include this bullet in the résumé");
   const ctl = el("div", { class:"bul-ctl" },
     el("button", { class:"mini", title:"Move up", disabled: i === 0, onclick: () => { const [x] = list.splice(i,1); list.splice(i-1,0,x); after(); }}, ico(I.up)),
     el("button", { class:"mini", title:"Move down", disabled: i === list.length - 1, onclick: () => { const [x] = list.splice(i,1); list.splice(i+1,0,x); after(); }}, ico(I.down)),
     el("button", { class:"mini del", title:"Delete", onclick: () => { list.splice(i,1); after(); }}, ico(I.del))
   );
-  return el("div", { class:"bul" }, el("span", { class:"dot" }), ta, ctl);
+  row.append(chk, ta, ctl);
+  return row;
+}
+// keep the "N/M shown" label live when a bullet is toggled without a full re-render
+function updateBarCounts(fromRow){
+  const card = fromRow.closest(".entry, .block-body");
+  if(!card) return;
+  const rows = card.querySelectorAll(".bul");
+  const shown = [...rows].filter(r => !r.classList.contains("off")).length;
+  const tot = card.querySelector(".bullbar .tot");
+  if(tot) tot.textContent = `${shown}/${rows.length} shown  `;
 }
 // stable-ish id so we can restore focus to a freshly added bullet
 let _bidMap = new WeakMap();
@@ -239,9 +402,9 @@ function mkBid(list, i){
   return "b-" + _bidMap.get(list) + "-" + i;
 }
 
-function block(id, titleNode, count, bodyNodes){
+function block(id, titleNode, count, bodyNodes, cls){
   const isCol = !!collapsed[id];
-  const b = el("div", { class:"block" + (isCol ? " collapsed" : "") });
+  const b = el("div", { class:"block" + (isCol ? " collapsed" : "") + (cls ? " " + cls : "") });
   const chev = el("span", { class:"chev", html:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">${I.chev}</svg>` });
   const header = el("header", { onclick: (e) => {
     if(e.target.closest("input,select,button")) return;
@@ -307,7 +470,8 @@ function renderEditor(){
     kindSel.value = sec.kind;
     kindSel.addEventListener("change", () => { sec.kind = kindSel.value; render(); save(); });
     const secCtl = moveCtl(state.sections, si, () => { render(); save(); });
-    const titleNode = el("div", { class:"sect-name-row" }, nameInput, kindSel, secCtl);
+    const secChk = checkbox(sec.on, v => { sec.on = v; render(); save(); }, "Include this whole section in the résumé");
+    const titleNode = el("div", { class:"sect-name-row" }, secChk, nameInput, kindSel, secCtl);
 
     const body = [];
     if(sec.kind === "entries"){
@@ -323,26 +487,31 @@ function renderEditor(){
         sec.entries.push(ne); focusEntry = ne.id; focusRequest = "e-" + ne.id; render(); save();
       }}, ico(I.plus), "Add " + noun)));
     }else{
+      const shownN = sec.bullets.filter(b => b.on !== false).length;
       const list = el("div", { class:"bullets" });
       sec.bullets.forEach((b, bi) => list.append(renderBullet(sec.bullets, bi, () => { render(); save(); })));
-      body.push(el("div", { class:"f" }, el("label", { text:"Items" }), list));
+      body.push(el("div", { class:"bullbar" }, el("label", { text:"Items" }),
+        el("span", { class:"tot", text: `${shownN}/${sec.bullets.length} shown  ` })));
+      body.push(list);
       body.push(el("div", { class:"addline" }, el("button", { class:"add", onclick: () => {
-        sec.bullets.push(""); focusRequest = mkBid(sec.bullets, sec.bullets.length - 1); render(); save();
+        sec.bullets.push(mkBullet("")); focusRequest = mkBid(sec.bullets, sec.bullets.length - 1); render(); save();
       }}, ico(I.plus), "Add item")));
     }
-    const count = sec.kind === "entries" ? sec.entries.length + " entr" + (sec.entries.length === 1 ? "y" : "ies")
-                                         : sec.bullets.length + " item" + (sec.bullets.length === 1 ? "" : "s");
-    root.append(block("sec-" + sec.id, titleNode, count, body));
+    const on = a => a.filter(x => x.on !== false).length;
+    const count = sec.kind === "entries"
+      ? `${on(sec.entries)}/${sec.entries.length} shown`
+      : `${on(sec.bullets)}/${sec.bullets.length} shown`;
+    root.append(block("sec-" + sec.id, titleNode, count, body, sec.on === false ? "sec-off" : ""));
   });
 
   /* add section */
   root.append(el("div", { class:"addline" },
     el("button", { class:"add", onclick: () => {
-      state.sections.push({ id: uid(), title:"NEW SECTION", kind:"entries", entries:[{ id:uid(), org:"", location:"", date:"", subtitle:"", extra:"", bullets:[""] }], bullets:[] });
+      state.sections.push(normalizeState({ sections:[{ id: uid(), title:"NEW SECTION", kind:"entries", on:true, entries:[emptyEntry()], bullets:[] }] }).sections[0]);
       render(); save();
     }}, ico(I.plus), "Add section"),
     el("button", { class:"add", onclick: () => {
-      state.sections.push({ id: uid(), title:"SKILLS", kind:"list", entries:[], bullets:[""] });
+      state.sections.push({ id: uid(), title:"SKILLS", kind:"list", on:true, entries:[], bullets:[mkBullet("")] });
       render(); save();
     }}, ico(I.plus), "Add skills list"),
     el("button", { class:"add", onclick: resetResume }, "Restore original résumé")
@@ -358,7 +527,7 @@ function renderEditor(){
 
 function resetResume(){
   if(!confirm("Restore the original résumé (Jimson Yang, from HealthCareResume.pdf)? This clears the current edits.")) return;
-  state = clone(DEFAULT); collapsed = {}; focusEntry = null;
+  state = normalizeState(clone(DEFAULT)); collapsed = {}; focusEntry = null;
   render(); save(true); toast("Original résumé restored");
 }
 
@@ -391,31 +560,32 @@ function renderPreview(){
   if(siteShown()) sheet.append(el("div", { class:"r-site", text: siteStr() }));
   sheet.append(el("div", { class:"r-rule" }));
 
-  state.sections.forEach(sec => {
+  state.sections.filter(sec => sec.on !== false).forEach(sec => {
     const wrap = el("div", { class:"r-section" });
     const edu = /EDUC/i.test(sec.title);
     wrap.append(el("div", { class:"r-secthead", text: sec.title || "SECTION" }));
 
     if(sec.kind === "list"){
-      const items = sec.bullets.map(b => (b || "").trim()).filter(Boolean);
+      const items = sec.bullets.filter(b => b.on !== false).map(b => b.text.trim()).filter(Boolean);
       const body = el("div", { class:"r-listbody" });
       if(items.length){
         const ul = el("ul", { class:"r-ul" });
         items.forEach(b => ul.append(el("li", { text: b })));
         body.append(ul);
-      }else body.append(el("div", { class:"r-empty", text:"No items yet" }));
+      }else body.append(el("div", { class:"r-empty", text:"No items shown" }));
       wrap.append(body);
       sheet.append(wrap);
       return;
     }
 
-    if(!sec.entries.length){
-      wrap.append(el("div", { class:"r-empty", text:"No entries yet" }));
+    const ents = sec.entries.filter(e => e.on !== false);
+    if(!ents.length){
+      wrap.append(el("div", { class:"r-empty", text: sec.entries.length ? "All entries hidden" : "No entries yet" }));
       sheet.append(wrap);
       return;
     }
 
-    sec.entries.forEach((entry, i) => {
+    ents.forEach(entry => {
       const left = el("div", { class:"r-left" });
       if((entry.date || "").trim()) left.append(el("div", { class:"r-date", text: entry.date.trim() }));
 
@@ -427,7 +597,7 @@ function renderPreview(){
         body.append(el("div", { class: edu ? "r-sub-b" : "r-sub-i", text: entry.subtitle.trim() }));
       if((entry.extra || "").trim())
         body.append(el("div", { class:"r-extra", text: entry.extra.trim() }));
-      const items = entry.bullets.map(b => (b || "").trim()).filter(Boolean);
+      const items = entry.bullets.filter(b => b.on !== false).map(b => b.text.trim()).filter(Boolean);
       if(items.length){
         const ul = el("ul", { class:"r-ul" });
         items.forEach(b => ul.append(el("li", { text: b })));
@@ -439,7 +609,13 @@ function renderPreview(){
   });
 }
 
-function render(){ renderEditor(); renderPreview(); }
+function render(){
+  const ed = $("#editor");
+  const st = ed ? ed.scrollTop : 0;
+  renderEditor();
+  renderPreview();
+  if(ed) ed.scrollTop = st;
+}
 
 /* ---------------- import / parse ---------------- */
 const SECT_ALT = "EDUCATION|EXPERIENCE|WORK EXPERIENCE|PROFESSIONAL EXPERIENCE|RELEVANT EXPERIENCE|EMPLOYMENT|LEADERSHIP|LEADERSHIP EXPERIENCE|ACTIVITIES|PROJECTS|PERSONAL PROJECTS|RESEARCH|RESEARCH EXPERIENCE|SKILLS|TECHNICAL SKILLS|SKILLS & INTERESTS|ADDITIONAL|ADDITIONAL INFORMATION|CERTIFICATIONS|AWARDS|HONORS|AWARDS & HONORS|VOLUNTEER|VOLUNTEER EXPERIENCE|INTERESTS|LANGUAGES|PUBLICATIONS";
@@ -626,9 +802,10 @@ async function pdfToText(file){
 /* ---------------- import modal wiring ---------------- */
 const modal = $("#modal");
 let parsed = null;
+let parsedJson = null;
 
 function openImport(){
-  parsed = null;
+  parsed = null; parsedJson = null;
   $("#found").hidden = true; $("#applyBtn").hidden = true; $("#msg").hidden = true;
   $("#pasteArea").value = ""; $("#fileInput").value = "";
   switchTab("paste");
@@ -662,29 +839,49 @@ $("#tabPdf").onclick = () => switchTab("pdf");
 $("#parseBtn").onclick = () => {
   const txt = $("#pasteArea").value.trim();
   if(!txt){ $("#msg").textContent = "Paste some text first."; $("#msg").hidden = false; return; }
+  parsedJson = null;
+  // a .json backup exported from here
+  if(txt[0] === "{"){
+    try{
+      const j = JSON.parse(txt);
+      if(j && Array.isArray(j.sections)){
+        parsedJson = j;
+        $("#found").innerHTML = "<b>Found a résumé backup</b> — importing it will load every section, entry and bullet exactly as saved.";
+        $("#found").hidden = false; $("#applyBtn").hidden = false; $("#msg").hidden = true;
+        return;
+      }
+    }catch(e){}
+  }
   try{ showFound(parseResume(txt)); }
   catch(e){ $("#msg").textContent = "Could not read that text. Try cleaning it up a little."; $("#msg").hidden = false; }
 };
 $("#applyBtn").onclick = () => {
+  if(parsedJson){
+    state = normalizeState(clone(parsedJson));
+    collapsed = {}; focusEntry = null;
+    closeImport(); render(); save(true); toast("Backup imported");
+    return;
+  }
   if(!parsed) return;
-  state = {
+  state = normalizeState({
     name: parsed.name || state.name, email: parsed.email || "", phone: parsed.phone || "",
     location: parsed.location || "", links: parsed.links || [],
     site: state.site || { label:"Personal projects", url:"", show:false },
     sections: parsed.sections.length ? parsed.sections : state.sections
-  };
+  });
   collapsed = {}; focusEntry = null;
   closeImport(); render(); save(true); toast("Résumé imported — review and refine");
 };
 $("#cancelImport").onclick = closeImport;
 function hasContent(){
+  const bt = b => ((b && b.text) || "").trim();
   return !!(state.name || "").trim() || state.sections.some(s =>
-    s.bullets.some(b => (b || "").trim()) ||
-    s.entries.some(e => (e.org || e.subtitle || e.extra || "").trim() || e.bullets.some(b => (b || "").trim())));
+    s.bullets.some(bt) ||
+    s.entries.some(e => (e.org || e.subtitle || e.extra || "").trim() || e.bullets.some(bt)));
 }
 $("#startBlank").onclick = () => {
   if(hasContent() && !confirm("Start a blank résumé? This clears the current one.")) return;
-  state = clone(BLANK); collapsed = {}; focusEntry = null;
+  state = normalizeState(clone(BLANK)); collapsed = {}; focusEntry = null;
   closeImport(); render(); save(true);
   toast("Blank résumé — start adding your experience");
 };
@@ -729,25 +926,30 @@ if(window.claude && claude.use){
 
 function slug(){ return (state.name || "resume").trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"") || "resume"; }
 
+/* what actually goes on the résumé: sections/entries/bullets whose include flag is on */
+const visSections = () => state.sections.filter(s => s.on !== false);
+const visEntries = s => s.entries.filter(e => e.on !== false);
+const visBullets = arr => arr.filter(b => b.on !== false).map(b => (b.text || "").trim()).filter(Boolean);
+
 function asPlainText(){
   const L = [];
   L.push((state.name || "").toUpperCase());
   L.push(contactParts().join("  •  "));
   if(siteStr()) L.push(siteStr());
   L.push("");
-  for(const s of state.sections){
+  for(const s of visSections()){
+    const listItems = s.kind === "list" ? visBullets(s.bullets) : null;
+    const ents = s.kind === "list" ? null : visEntries(s);
+    if((listItems && !listItems.length) || (ents && !ents.length)) continue;
     L.push(s.title.toUpperCase());
     L.push("-".repeat(s.title.length));
-    if(s.kind === "list"){
-      s.bullets.filter(Boolean).forEach(b => L.push("  • " + b));
-      L.push(""); continue;
-    }
-    for(const e of s.entries){
+    if(listItems){ listItems.forEach(b => L.push("  • " + b)); L.push(""); continue; }
+    for(const e of ents){
       const head = [e.org, e.location].filter(Boolean).join("  —  ");
       L.push((e.date ? e.date + "   " : "") + head);
       if(e.subtitle) L.push("   " + e.subtitle);
       if(e.extra) L.push("   " + e.extra);
-      e.bullets.filter(Boolean).forEach(b => L.push("   • " + b));
+      visBullets(e.bullets).forEach(b => L.push("   • " + b));
       L.push("");
     }
   }
@@ -761,18 +963,18 @@ function asMarkdown(){
   L.push(contactParts().join(" · "));
   if(siteStr()) L.push("\n**" + siteStr() + "**");
   L.push("");
-  for(const s of state.sections){
+  for(const s of visSections()){
+    const listItems = s.kind === "list" ? visBullets(s.bullets) : null;
+    const ents = s.kind === "list" ? null : visEntries(s);
+    if((listItems && !listItems.length) || (ents && !ents.length)) continue;
     L.push("## " + s.title);
     L.push("");
-    if(s.kind === "list"){
-      s.bullets.filter(Boolean).forEach(b => L.push("- " + b));
-      L.push(""); continue;
-    }
-    for(const e of s.entries){
+    if(listItems){ listItems.forEach(b => L.push("- " + b)); L.push(""); continue; }
+    for(const e of ents){
       L.push("### " + [e.org, e.location].filter(Boolean).join(" — "));
       const meta = [e.subtitle, e.extra, e.date].filter(Boolean).join(" · ");
       if(meta){ L.push("*" + meta + "*"); L.push(""); }
-      e.bullets.filter(Boolean).forEach(b => L.push("- " + b));
+      visBullets(e.bullets).forEach(b => L.push("- " + b));
       L.push("");
     }
   }
@@ -791,19 +993,25 @@ function asStandaloneHtml(){
     siteHtml = `<div class="site">${label ? esc(label) + " · " : ""}<a href="${esc(href)}">${esc(shown)}</a></div>`;
   }
   body += `<div class="name">${esc(state.name)}</div><div class="contact">${contact}</div>${siteHtml}<div class="rule"></div>`;
-  for(const s of state.sections){
-    body += `<section><div class="secthead">${esc(s.title)}</div>`;
+  for(const s of visSections()){
     if(s.kind === "list"){
-      body += `<ul>` + s.bullets.filter(Boolean).map(b => `<li>${esc(b)}</li>`).join("") + `</ul>`;
-    }else{
-      s.entries.forEach(e => {
-        const left = e.date ? `<div class="dt">${esc(e.date)}</div>` : "";
-        const sub = e.subtitle ? `<div class="${/EDUC/i.test(s.title) ? "subb" : "subi"}">${esc(e.subtitle)}</div>` : "";
-        const extra = e.extra ? `<div>${esc(e.extra)}</div>` : "";
-        const uls = e.bullets.filter(Boolean).length ? `<ul>${e.bullets.filter(Boolean).map(b => `<li>${esc(b)}</li>`).join("")}</ul>` : "";
-        body += `<div class="entry"><div class="left">${left}</div><div class="bd"><div class="org-row"><span class="org">${esc(e.org)}</span>${e.location ? `<span class="loc">${esc(e.location)}</span>` : ""}</div>${sub}${extra}${uls}</div></div>`;
-      });
+      const items = visBullets(s.bullets);
+      if(!items.length) continue;
+      body += `<section><div class="secthead">${esc(s.title)}</div><ul>` +
+        items.map(b => `<li>${esc(b)}</li>`).join("") + `</ul></section>`;
+      continue;
     }
+    const ents = visEntries(s);
+    if(!ents.length) continue;
+    body += `<section><div class="secthead">${esc(s.title)}</div>`;
+    ents.forEach(e => {
+      const left = e.date ? `<div class="dt">${esc(e.date)}</div>` : "";
+      const sub = e.subtitle ? `<div class="${/EDUC/i.test(s.title) ? "subb" : "subi"}">${esc(e.subtitle)}</div>` : "";
+      const extra = e.extra ? `<div>${esc(e.extra)}</div>` : "";
+      const bl = visBullets(e.bullets);
+      const uls = bl.length ? `<ul>${bl.map(b => `<li>${esc(b)}</li>`).join("")}</ul>` : "";
+      body += `<div class="entry"><div class="left">${left}</div><div class="bd"><div class="org-row"><span class="org">${esc(e.org)}</span>${e.location ? `<span class="loc">${esc(e.location)}</span>` : ""}</div>${sub}${extra}${uls}</div></div>`;
+    });
     body += `</section>`;
   }
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(state.name)} — Résumé</title>
@@ -853,15 +1061,19 @@ function buildPdf(){
   doc.setLineWidth(1.1); doc.line(M, y, RIGHT, y); y += 15;
 
   const LH = 10.5;
-  for(const s of state.sections){
+  for(const s of visSections()){
+    const listItems = s.kind === "list" ? visBullets(s.bullets) : null;
+    const ents = s.kind === "list" ? null : visEntries(s);
+    if((listItems && !listItems.length) || (ents && !ents.length)) continue;
+
     need(34);
     setF("bold", 9.5);
     doc.text((s.title || "").toUpperCase(), M, y, { charSpace:1.5 });
     y += 4.5; doc.setLineWidth(0.6); doc.line(M, y, RIGHT, y); y += 13;
 
-    if(s.kind === "list"){
+    if(listItems){
       setF("normal", 9);
-      for(const b of s.bullets.filter(Boolean)){
+      for(const b of listItems){
         const ls = doc.splitTextToSize(b, CW - 12);
         need(ls.length * LH);
         doc.text("•", M, y); doc.text(ls, M + 12, y);
@@ -870,7 +1082,7 @@ function buildPdf(){
       y += 6; continue;
     }
 
-    for(const e of s.entries){
+    for(const e of ents){
       need(26);
       if((e.date || "").trim()){ setF("bold", 8); doc.text(e.date.trim().toUpperCase(), M, y); }
       setF("bold", 10);
@@ -892,7 +1104,7 @@ function buildPdf(){
         need(xl.length * 10 + 2); doc.text(xl, bodyX, y); y += xl.length * 10 + 1;
       }
       setF("normal", 9);
-      for(const b of e.bullets.filter(Boolean)){
+      for(const b of visBullets(e.bullets)){
         const ls = doc.splitTextToSize(b, bodyW - 12);
         need(ls.length * LH);
         doc.text("•", bodyX, y); doc.text(ls, bodyX + 12, y);
@@ -962,6 +1174,13 @@ $("#exCancel").onclick = () => exModal.hidden = true;
 exModal.addEventListener("click", e => { if(e.target === exModal) exModal.hidden = true; });
 exModal.querySelectorAll("[data-fmt]").forEach(b => b.onclick = () => doExport(b.dataset.fmt));
 
+/* ---------------- my résumés ---------------- */
+const docsModal = $("#docsModal");
+$("#docsBtn").onclick = () => { renderDocs(); docsModal.hidden = false; };
+$("#docsClose").onclick = () => docsModal.hidden = true;
+$("#newDocBtn").onclick = () => newDoc();
+docsModal.addEventListener("click", e => { if(e.target === docsModal) docsModal.hidden = true; });
+
 /* ---------------- misc wiring ---------------- */
 $("#printBtn").onclick = () => window.print();
 
@@ -995,9 +1214,13 @@ $("#vEdit").onclick = () => { bodyEl.setAttribute("data-view", "edit"); $("#vEdi
 $("#vPrev").onclick = () => { bodyEl.setAttribute("data-view", "preview"); $("#vPrev").classList.add("on"); $("#vEdit").classList.remove("on"); };
 
 window.addEventListener("keydown", e => {
-  if(e.key === "Escape"){ if(!modal.hidden) closeImport(); if(!exModal.hidden) exModal.hidden = true; }
-  if((e.metaKey || e.ctrlKey) && e.key === "p"){ /* let browser print */ }
+  if(e.key === "Escape"){
+    if(!modal.hidden) closeImport();
+    if(!exModal.hidden) exModal.hidden = true;
+    if(!docsModal.hidden) docsModal.hidden = true;
+  }
 });
 
 render();
-save();
+updateDocLabel();
+save(true);

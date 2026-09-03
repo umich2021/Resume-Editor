@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Résumé Studio</title>
-<meta name="description" content="A résumé editor and creator in the University of Michigan Ross format. Import an existing résumé, edit every section, and export to PDF, HTML, or plain text.">
+<meta name="description" content="A résumé editor and creator in the University of Michigan Ross format. Import an existing résumé, edit every section, toggle what shows per role, and export to PDF, HTML, or plain text — entirely in your browser.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;450;500;600&family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
@@ -17,8 +17,13 @@
   <div class="appbar">
     <div class="brand">
       <div class="mark" aria-hidden="true"></div>
-      <b>Résumé Studio</b><span>editor</span>
+      <b>Résumé Studio</b>
     </div>
+    <button class="docchip" id="docsBtn" title="Switch between your résumés">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+      <span id="docLabel">My résumé</span>
+      <svg class="cx" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
     <div class="viewtoggle" role="tablist" aria-label="View">
       <button id="vEdit" class="on">Edit</button>
       <button id="vPrev">Preview</button>
@@ -43,13 +48,13 @@
 <div class="modal" id="modal" hidden>
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
     <h3 id="dlgTitle">Start a résumé</h3>
-    <p class="lede">Bring in an existing résumé — we'll pull out your contact details, education, and experience and drop them into the editor to refine — or begin from a blank outline and build it up.</p>
+    <p class="lede">Bring in an existing résumé — paste its text or a PDF and we'll pull out your contact details, education, and experience — or paste a <b>.json</b> backup to restore one exactly. This replaces the résumé you're editing now; duplicate it first (in <b>My résumés</b>) to keep the original.</p>
     <div class="tabs">
       <button id="tabPaste" class="on">Paste text</button>
       <button id="tabPdf">Upload PDF</button>
     </div>
     <div class="pane" id="panePaste">
-      <textarea class="paste" id="pasteArea" placeholder="Paste the full text of your résumé here…"></textarea>
+      <textarea class="paste" id="pasteArea" placeholder="Paste the full text of your résumé — or a .json backup exported from here…"></textarea>
     </div>
     <div class="pane" id="panePdf" hidden>
       <label class="drop" id="drop">
@@ -65,6 +70,21 @@
       <button class="btn" id="cancelImport">Cancel</button>
       <button class="btn" id="parseBtn">Scan résumé</button>
       <button class="btn primary" id="applyBtn" hidden>Replace résumé</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="docsModal" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="docsTitle" style="max-width:480px">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px">
+      <h3 id="docsTitle">My résumés</h3>
+      <button class="btn primary" id="newDocBtn">New résumé</button>
+    </div>
+    <p class="lede">One living document per row. Duplicate a résumé, then toggle sections and bullet points to tailor it for a role.</p>
+    <div id="docsList" class="docs-list"></div>
+    <p class="lede" style="margin:14px 0 0; font-size:11.5px">Everything is stored only in this browser — nothing is uploaded or synced. Export a <b>.json</b> to back one up or move it to another device; paste it back in via Import.</p>
+    <div class="dialog-foot">
+      <button class="btn" id="docsClose">Close</button>
     </div>
   </div>
 </div>
