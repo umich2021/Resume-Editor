@@ -171,8 +171,8 @@ function save(now){
 }
 
 function updateDocLabel(){
-  const el = $("#docLabel");
-  if(el) el.textContent = curDoc() ? curDoc().name : "";
+  const lbl = $("#docLabel");
+  if(lbl) lbl.textContent = curDoc() ? curDoc().name : "";
 }
 function switchDoc(id){
   if(!store.docs[id] || id === store.currentId) return;
