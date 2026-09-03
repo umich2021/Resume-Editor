@@ -296,7 +296,7 @@ function bindInput(node, apply){
   node.addEventListener("input", () => {
     apply(node.value);
     if(node.tagName === "TEXTAREA") grow(node);
-    renderPreview();
+    safePreview();
     save();
   });
 }
@@ -377,7 +377,7 @@ function renderBullet(list, i, after){
   ta.value = b.text;
   bindInput(ta, v => b.text = v);
   const row = el("div", { class:"bul" + (b.on === false ? " off" : "") });
-  const chk = checkbox(b.on, v => { b.on = v; row.classList.toggle("off", !v); renderPreview(); save(); updateBarCounts(row); }, "Include this bullet in the résumé");
+  const chk = checkbox(b.on, v => { b.on = v; row.classList.toggle("off", !v); safePreview(); save(); updateBarCounts(row); }, "Include this bullet in the résumé");
   const ctl = el("div", { class:"bul-ctl" },
     el("button", { class:"mini", title:"Move up", disabled: i === 0, onclick: () => { const [x] = list.splice(i,1); list.splice(i-1,0,x); after(); }}, ico(I.up)),
     el("button", { class:"mini", title:"Move down", disabled: i === list.length - 1, onclick: () => { const [x] = list.splice(i,1); list.splice(i+1,0,x); after(); }}, ico(I.down)),
@@ -445,7 +445,7 @@ function renderEditor(){
     siteWrap.classList.toggle("off", !siteToggle.checked);
     siteWrap.classList.toggle("on", siteToggle.checked);
     if(siteToggle.checked && !state.site.url) siteUrl.focus();
-    renderPreview(); save();
+    safePreview(); save();
   });
   siteWrap.append(
     el("div", { class:"top" },
@@ -572,92 +572,79 @@ function entryEl(entry, edu){
   return el("div", { class:"r-entry" }, left, body);
 }
 
-// break the résumé into atomic blocks that a page break may fall between
-function buildUnits(){
-  const units = [];
+function renderPreview(){
+  const host = $("#pages");
+  host.innerHTML = "";
+  const sheet = el("div", { class:"sheet" });
+  host.append(sheet);
+
   const head = el("div", { class:"u-head" });
   head.append(el("div", { class:"r-name", text: state.name || "Your Name" }));
   const c = el("div", { class:"r-contact" }); c.append(contactLine()); head.append(c);
   if(siteShown()) head.append(el("div", { class:"r-site", text: siteStr() }));
   head.append(el("div", { class:"r-rule" }));
-  units.push(head);
+  sheet.append(head);
 
   state.sections.filter(sec => sec.on !== false).forEach(sec => {
     const edu = /EDUC/i.test(sec.title);
-    const header = () => el("div", { class:"r-secthead", text: sec.title || "SECTION" });
+    const wrap = el("div", { class:"u-sec" }, el("div", { class:"r-secthead", text: sec.title || "SECTION" }));
 
     if(sec.kind === "list"){
       const items = sec.bullets.filter(b => b.on !== false).map(b => b.text.trim()).filter(Boolean);
-      const u = el("div", { class:"u-sec" }, header());
       if(items.length){
         const ul = el("ul", { class:"r-ul" });
         items.forEach(b => ul.append(el("li", { text: b })));
-        u.append(ul);
-      }else u.append(el("div", { class:"r-empty", text:"No items shown" }));
-      units.push(u);
+        wrap.append(ul);
+      }else wrap.append(el("div", { class:"r-empty", text:"No items shown" }));
+      sheet.append(wrap);
       return;
     }
 
     const ents = sec.entries.filter(e => e.on !== false);
     if(!ents.length){
-      units.push(el("div", { class:"u-sec" }, header(),
-        el("div", { class:"r-empty", text: sec.entries.length ? "All entries hidden" : "No entries yet" })));
+      wrap.append(el("div", { class:"r-empty", text: sec.entries.length ? "All entries hidden" : "No entries yet" }));
+      sheet.append(wrap);
       return;
     }
-    // section header stays with its first entry; later entries can flow onto the next page
-    units.push(el("div", { class:"u-sec" }, header(), entryEl(ents[0], edu)));
-    ents.slice(1).forEach(entry => units.push(el("div", { class:"u-entry" }, entryEl(entry, edu))));
+    ents.forEach(entry => wrap.append(entryEl(entry, edu)));
+    sheet.append(wrap);
   });
-  return units;
+
+  requestAnimationFrame(() => paintPageGuides(sheet));
 }
 
-function renderPreview(){
-  const host = $("#pages");
-  host.innerHTML = "";
-
-  let w = host.clientWidth;
-  if(!w || w < 60) w = Math.min(760, (window.innerWidth || 900) - 52);
-  const ph = w * 11 / 8.5;
-  host.style.setProperty("--ph", ph + "px");
-
-  const probe = el("div", { class:"sheet", style:"visibility:hidden;position:absolute" });
-  probe.append(el("div", { class:"page-body" }));
-  host.append(probe);
-  const cs = getComputedStyle(probe);
-  // 0.985 keeps a hair of slack so a screen page never spills onto an extra printed page
-  const usable = (probe.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)) * 0.985;
-  host.removeChild(probe);
-
-  const pages = [];
-  let body = null;
-  const newPage = () => {
-    const p = el("div", { class:"sheet" });
-    body = el("div", { class:"page-body" });
-    p.append(body); host.append(p); pages.push(p);
-  };
-  newPage();
-
-  buildUnits().forEach(u => {
-    body.append(u);
-    if(body.scrollHeight > usable + 1 && body.childElementCount > 1){
-      body.removeChild(u);
-      newPage();
-      body.append(u);
+// approximate US-Letter page-break guides overlaid on the continuous sheet.
+// (pdf.js "Preview PDF" is the exact one — HTML metrics only get close.)
+function paintPageGuides(sheet){
+  try{
+    sheet.querySelectorAll(".pgbreak").forEach(n => n.remove());
+    const w = sheet.clientWidth;
+    if(!w) return;
+    sheet.style.minHeight = Math.round(w * 11 / 8.5) + "px";
+    const cs = getComputedStyle(sheet);
+    const padT = parseFloat(cs.paddingTop) || 0;
+    const contentW = w - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+    const pxPerIn = contentW / 7.3;          // usable text column ≈ 7.3in
+    const step = pxPerIn * 9.6;               // usable height per page ≈ 9.6in
+    const total = sheet.scrollHeight;
+    let n = 1, y = padT + step;
+    while(y < total - 10 && n < 15){
+      sheet.append(el("div", { class:"pgbreak", style:`top:${Math.round(y)}px` },
+        el("span", { text:`page ${n + 1} ↓` })));
+      y += step; n++;
     }
-  });
-
-  pages.forEach((p, i) => {
-    const pb = p.firstChild;
-    if(pb.scrollHeight > usable + 1) p.classList.add("page-over");
-    p.append(el("div", { class:"page-num", text: pages.length > 1 ? `${i + 1} / ${pages.length}` : "" }));
-  });
+  }catch(e){}
 }
 
+function safePreview(){
+  try{ renderPreview(); }
+  catch(e){ console.error("preview render failed:", e); }
+}
 function render(){
   const ed = $("#editor");
   const st = ed ? ed.scrollTop : 0;
   renderEditor();
-  renderPreview();
+  safePreview();
   if(ed) ed.scrollTop = st;
 }
 
@@ -1285,7 +1272,7 @@ $("#newDocBtn").onclick = () => newDoc();
 docsModal.addEventListener("click", e => { if(e.target === docsModal) docsModal.hidden = true; });
 
 /* ---------------- misc wiring ---------------- */
-$("#printBtn").onclick = () => { renderPreview(); setTimeout(() => window.print(), 80); };
+$("#printBtn").onclick = () => { safePreview(); setTimeout(() => window.print(), 80); };
 
 let toastTimer;
 function toast(msg){
@@ -1314,7 +1301,7 @@ $("#themeBtn").onclick = () => {
 const bodyEl = document.body;
 bodyEl.setAttribute("data-view", "edit");
 $("#vEdit").onclick = () => { bodyEl.setAttribute("data-view", "edit"); $("#vEdit").classList.add("on"); $("#vPrev").classList.remove("on"); growAll(); };
-$("#vPrev").onclick = () => { bodyEl.setAttribute("data-view", "preview"); $("#vPrev").classList.add("on"); $("#vEdit").classList.remove("on"); renderPreview(); };
+$("#vPrev").onclick = () => { bodyEl.setAttribute("data-view", "preview"); $("#vPrev").classList.add("on"); $("#vEdit").classList.remove("on"); safePreview(); };
 
 let _rz;
 window.addEventListener("resize", () => { clearTimeout(_rz); _rz = setTimeout(renderPreview, 180); });
