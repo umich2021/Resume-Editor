@@ -105,6 +105,7 @@ function normalizeState(s){
   if(!s.site || typeof s.site !== "object") s.site = { label:"Personal projects", url:"", show:false };
   if(typeof s.site.show !== "boolean") s.site.show = false;
   s.name = s.name || ""; s.email = s.email || ""; s.phone = s.phone || ""; s.location = s.location || "";
+  s.fontScale = (typeof s.fontScale === "number" && s.fontScale > 0) ? Math.min(1.4, Math.max(0.8, s.fontScale)) : 1;
   if(!Array.isArray(s.links)) s.links = [];
   if(!Array.isArray(s.sections) || !s.sections.length) s.sections = clone(DEFAULT.sections);
   const fixB = arr => (Array.isArray(arr) ? arr : []).map(b =>
@@ -181,7 +182,7 @@ function switchDoc(id){
   state = normalizeState(store.docs[id].data);
   store.docs[id].data = state;
   collapsed = {}; focusEntry = null;
-  persistStore(); render(); updateDocLabel(); renderDocs();
+  persistStore(); render(); updateDocLabel(); applyFontUI(); renderDocs();
   toast('Now editing "' + store.docs[id].name + '"');
 }
 function addDoc(name, data){
@@ -576,6 +577,7 @@ function renderPreview(){
   const host = $("#pages");
   host.innerHTML = "";
   const sheet = el("div", { class:"sheet" });
+  sheet.style.setProperty("--rs", state.fontScale || 1);
   host.append(sheet);
 
   const head = el("div", { class:"u-head" });
@@ -625,6 +627,7 @@ function render(){
   const st = ed ? ed.scrollTop : 0;
   renderEditor();
   safePreview();
+  if(typeof applyFontUI === "function") applyFontUI();
   if(ed) ed.scrollTop = st;
 }
 
@@ -1043,26 +1046,30 @@ function asStandaloneHtml(){
     });
     body += `</section>`;
   }
+  const rs = state.fontScale || 1;
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(state.name)} — Résumé</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box} body{margin:0;background:#eee;font-family:"Source Serif 4",Georgia,serif;color:#161a22}
-.sheet{max-width:760px;margin:24px auto;background:#fff;padding:44px 50px 52px;font-size:10.5px;line-height:1.42;box-shadow:0 10px 30px rgba(0,0,0,.15)}
-.name{text-align:center;font-weight:700;font-size:16px;letter-spacing:.15em;text-transform:uppercase}
-.contact{text-align:center;font-size:9px;color:#464646;margin-top:5px} .contact .s{color:#8b8b8b;margin:0 5px}
-.site{text-align:center;font-size:9.3px;font-weight:700;letter-spacing:.04em;margin-top:3px}
+*{box-sizing:border-box} body{margin:0;background:#eee;font-family:"Source Serif 4",Georgia,serif;color:#181818}
+.sheet{max-width:760px;margin:24px auto;background:#fff;padding:50px 56px 56px;font-size:${(10.5 * rs).toFixed(2)}px;line-height:1.42;box-shadow:0 10px 30px rgba(0,0,0,.15)}
+.name{text-align:center;font-weight:700;font-size:1.55em;letter-spacing:.15em;text-transform:uppercase}
+.contact{text-align:center;font-size:.9em;color:#464646;margin-top:.5em} .contact .s{color:#8b8b8b;margin:0 .5em}
+.site{text-align:center;font-size:.93em;font-weight:700;letter-spacing:.04em;margin-top:.3em}
 .site a{color:inherit;text-decoration:none}
-.rule{height:1.4px;background:#1c1c1c;margin:11px 0 15px}
-section{margin-bottom:20px}
-.secthead{font-weight:700;text-transform:uppercase;letter-spacing:.19em;font-size:10px;padding-bottom:4px;margin-bottom:10px;border-bottom:1.6px solid #181818}
-.entry{display:grid;grid-template-columns:58px 1fr;column-gap:13px;margin-bottom:9px}
-.left{font-family:"IBM Plex Mono",monospace;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding-top:2px;line-height:1.5;color:#181818}
+.rule{height:1.4px;background:#1c1c1c;margin:1.1em 0 0}
+section{margin-bottom:0}
+section + section{margin-top:1.9em}
+.sheet > .rule + section{margin-top:1.5em}
+.secthead{font-weight:700;text-transform:uppercase;letter-spacing:.19em;font-size:1em;padding-bottom:.4em;margin-bottom:1em;border-bottom:1.6px solid #181818}
+.entry{display:grid;grid-template-columns:5.2em 1fr;column-gap:1.2em;margin-bottom:1em}
+.entry:last-child{margin-bottom:0}
+.left{font-size:.92em;font-weight:700;padding-top:.15em;line-height:1.45;color:#181818;font-variant-numeric:tabular-nums;overflow-wrap:break-word}
 .dt{color:#181818;font-weight:700}
-.org-row{display:flex;justify-content:space-between;gap:4px 14px;align-items:baseline;flex-wrap:wrap}
+.org-row{display:flex;justify-content:space-between;gap:.3em 1.4em;align-items:baseline;flex-wrap:wrap}
 .org{font-weight:700;text-transform:uppercase;letter-spacing:.035em}
-.loc{font-weight:700;font-size:8.6px;white-space:nowrap;margin-left:auto}
-.subi{font-style:italic;margin-top:1.5px} .subb{font-weight:700;margin-top:1.5px}
-ul{margin:3px 0 0;padding-left:15px} li{margin-bottom:2.5px;padding-left:3px}
+.loc{font-weight:700;font-size:.9em;white-space:nowrap;margin-left:auto}
+.subi{font-style:italic;margin-top:.15em} .subb{font-weight:700;margin-top:.15em}
+ul{margin:.35em 0 0;padding-left:1.5em} li{margin-bottom:.28em;padding-left:.3em}
 @media print{body{background:#fff}.sheet{margin:0;max-width:none;box-shadow:none;padding:.5in .55in}@page{margin:0}}
 </style></head><body><div class="sheet">${body}</div></body></html>`;
 }
@@ -1070,51 +1077,52 @@ ul{margin:3px 0 0;padding-left:15px} li{margin-bottom:2.5px;padding-left:3px}
 function buildPdf(){
   const J = window.jspdf && window.jspdf.jsPDF;
   if(!J) return null;
+  const S = state.fontScale || 1;                 // résumé text-size knob
   const doc = new J({ unit:"pt", format:"letter", compress:true });
   const PW = doc.internal.pageSize.getWidth(), PH = doc.internal.pageSize.getHeight();
   const M = 44, RIGHT = PW - M, CW = PW - M * 2;
-  const dateW = 50, gap = 12, bodyX = M + dateW + gap, bodyW = RIGHT - bodyX;
+  const dateW = 52 * S, gap = 12, bodyX = M + dateW + gap, bodyW = RIGHT - bodyX;
   let y = M + 4;
-  const setF = (style, size) => { doc.setFont("times", style); doc.setFontSize(size); };
+  const setF = (style, size) => { doc.setFont("times", style); doc.setFontSize(size * S); };
+  const lh = pt => pt * S;                         // scaled line height
   const need = h => { if(y + h > PH - M){ doc.addPage(); y = M + 4; } };
   doc.setTextColor(24, 24, 24); doc.setDrawColor(24, 24, 24);
 
-  setF("bold", 15);
+  setF("bold", 15.5);
   doc.text((state.name || "").toUpperCase(), PW / 2, y, { align:"center", charSpace:1.4 });
-  y += 14;
-  setF("normal", 8.5);
+  y += lh(14);
+  setF("normal", 8.7);
   const cp = contactParts().join("    •    ");
-  if(cp){ doc.text(cp, PW / 2, y, { align:"center" }); y += 11; }
-  if(siteStr()){ setF("bold", 8.5); doc.text(siteStr(), PW / 2, y, { align:"center" }); y += 11; }
+  if(cp){ doc.text(cp, PW / 2, y, { align:"center" }); y += lh(11); }
+  if(siteStr()){ setF("bold", 8.5); doc.text(siteStr(), PW / 2, y, { align:"center" }); y += lh(11); }
   y += 4;
-  doc.setLineWidth(1.1); doc.line(M, y, RIGHT, y); y += 15;
+  doc.setLineWidth(1.1); doc.line(M, y, RIGHT, y); y += lh(15);
 
-  const LH = 10.5;
   for(const s of visSections()){
     const listItems = s.kind === "list" ? visBullets(s.bullets) : null;
     const ents = s.kind === "list" ? null : visEntries(s);
     if((listItems && !listItems.length) || (ents && !ents.length)) continue;
 
-    y += 6;
-    need(34);
+    y += lh(7);
+    need(lh(34));
     setF("bold", 10);
     doc.text((s.title || "").toUpperCase(), M, y, { charSpace:1.9 });
-    y += 5; doc.setLineWidth(1.1); doc.line(M, y, RIGHT, y); y += 13;
+    y += lh(5); doc.setLineWidth(1.1); doc.line(M, y, RIGHT, y); y += lh(13);
 
     if(listItems){
       setF("normal", 9);
       for(const b of listItems){
         const ls = doc.splitTextToSize(b, CW - 12);
-        need(ls.length * LH);
+        need(ls.length * lh(10.8));
         doc.text("•", M, y); doc.text(ls, M + 12, y);
-        y += ls.length * LH + 2;
+        y += ls.length * lh(10.8) + lh(2);
       }
-      y += 6; continue;
+      y += lh(6); continue;
     }
 
     for(const e of ents){
-      need(26);
-      if((e.date || "").trim()){ setF("bold", 8); doc.text(e.date.trim().toUpperCase(), M, y); }
+      need(lh(26));
+      if((e.date || "").trim()){ setF("bold", 8.5); doc.text(e.date.trim(), M, y); }
       setF("bold", 10);
       const loc = (e.location || "").trim();
       let locW = 0;
@@ -1122,25 +1130,25 @@ function buildPdf(){
       const orgLines = doc.splitTextToSize((e.org || "").toUpperCase(), Math.max(60, bodyW - (loc ? locW + 12 : 0)));
       doc.text(orgLines, bodyX, y);
       if(loc){ setF("bold", 8.5); doc.text(loc, RIGHT, y, { align:"right" }); }
-      y += orgLines.length * 11;
+      y += orgLines.length * lh(11);
       if((e.subtitle || "").trim()){
         setF(/EDUC/i.test(s.title) ? "bold" : "italic", 9.5);
         const sl = doc.splitTextToSize(e.subtitle.trim(), bodyW);
-        need(sl.length * 10 + 2); doc.text(sl, bodyX, y); y += sl.length * 10 + 1;
+        need(sl.length * lh(10.5)); doc.text(sl, bodyX, y); y += sl.length * lh(10.5) + lh(1);
       }
       if((e.extra || "").trim()){
         setF("normal", 9.5);
         const xl = doc.splitTextToSize(e.extra.trim(), bodyW);
-        need(xl.length * 10 + 2); doc.text(xl, bodyX, y); y += xl.length * 10 + 1;
+        need(xl.length * lh(10.5)); doc.text(xl, bodyX, y); y += xl.length * lh(10.5) + lh(1);
       }
       setF("normal", 9);
       for(const b of visBullets(e.bullets)){
         const ls = doc.splitTextToSize(b, bodyW - 12);
-        need(ls.length * LH);
+        need(ls.length * lh(10.8));
         doc.text("•", bodyX, y); doc.text(ls, bodyX + 12, y);
-        y += ls.length * LH + 2;
+        y += ls.length * lh(10.8) + lh(2);
       }
-      y += 8;
+      y += lh(8);
     }
   }
   return doc;
@@ -1279,6 +1287,23 @@ $("#themeBtn").onclick = () => {
   toast(theme === "light" ? "Light theme" : "Dark theme");
 };
 
+/* ---------------- résumé text size ---------------- */
+const FS_MIN = 0.8, FS_MAX = 1.4, FS_STEP = 0.05;
+function applyFontUI(){
+  const s = state.fontScale || 1;
+  $("#fsVal").textContent = Math.round(s * 100) + "%";
+  $("#fsDown").disabled = s <= FS_MIN + 1e-6;
+  $("#fsUp").disabled = s >= FS_MAX - 1e-6;
+}
+function bumpFont(dir){
+  const next = Math.min(FS_MAX, Math.max(FS_MIN, Math.round(((state.fontScale || 1) + dir * FS_STEP) * 100) / 100));
+  if(next === state.fontScale) return;
+  state.fontScale = next;
+  applyFontUI(); safePreview(); save();
+}
+$("#fsDown").onclick = () => bumpFont(-1);
+$("#fsUp").onclick = () => bumpFont(1);
+
 const bodyEl = document.body;
 bodyEl.setAttribute("data-view", "edit");
 $("#vEdit").onclick = () => { bodyEl.setAttribute("data-view", "edit"); $("#vEdit").classList.add("on"); $("#vPrev").classList.remove("on"); growAll(); };
@@ -1298,4 +1323,5 @@ window.addEventListener("keydown", e => {
 
 render();
 updateDocLabel();
+applyFontUI();
 save(true);

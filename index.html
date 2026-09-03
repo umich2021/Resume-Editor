@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Résumé Studio</title>
-<meta name="description" content="A résumé editor and creator in the University of Michigan Ross format. Import an existing résumé, edit every section, toggle what shows per role, and export to PDF/HTML — entirely in your browser.">
+<meta name="description" content="A résumé editor and creator in the University of Michigan Ross format. Import an existing résumé, edit every section, adjust the text size, toggle what shows per role, and export to PDF/HTML — entirely in your browser.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;450;500;600&family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
@@ -29,6 +29,11 @@
       <button id="vPrev">Preview</button>
     </div>
     <div class="saveflag" id="saveflag"><i></i><span>Saved</span></div>
+    <div class="fontctl" role="group" aria-label="Résumé text size">
+      <button id="fsDown" title="Smaller résumé text" aria-label="Smaller text">A&minus;</button>
+      <span id="fsVal">100%</span>
+      <button id="fsUp" title="Larger résumé text" aria-label="Larger text">A+</button>
+    </div>
     <div class="tools">
       <button class="btn" id="importBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span class="lbl">Import</span></button>
       <button class="btn" id="previewBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg><span class="lbl">Preview PDF</span></button>
