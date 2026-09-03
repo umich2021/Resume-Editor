@@ -610,30 +610,10 @@ function renderPreview(){
     sheet.append(wrap);
   });
 
-  requestAnimationFrame(() => paintPageGuides(sheet));
-}
-
-// approximate US-Letter page-break guides overlaid on the continuous sheet.
-// (pdf.js "Preview PDF" is the exact one — HTML metrics only get close.)
-function paintPageGuides(sheet){
-  try{
-    sheet.querySelectorAll(".pgbreak").forEach(n => n.remove());
+  requestAnimationFrame(() => {
     const w = sheet.clientWidth;
-    if(!w) return;
-    sheet.style.minHeight = Math.round(w * 11 / 8.5) + "px";
-    const cs = getComputedStyle(sheet);
-    const padT = parseFloat(cs.paddingTop) || 0;
-    const contentW = w - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
-    const pxPerIn = contentW / 7.3;          // usable text column ≈ 7.3in
-    const step = pxPerIn * 9.6;               // usable height per page ≈ 9.6in
-    const total = sheet.scrollHeight;
-    let n = 1, y = padT + step;
-    while(y < total - 10 && n < 15){
-      sheet.append(el("div", { class:"pgbreak", style:`top:${Math.round(y)}px` },
-        el("span", { text:`page ${n + 1} ↓` })));
-      y += step; n++;
-    }
-  }catch(e){}
+    if(w) sheet.style.minHeight = Math.round(w * 11 / 8.5) + "px";
+  });
 }
 
 function safePreview(){
@@ -1073,8 +1053,8 @@ function asStandaloneHtml(){
 .site{text-align:center;font-size:9.3px;font-weight:700;letter-spacing:.04em;margin-top:3px}
 .site a{color:inherit;text-decoration:none}
 .rule{height:1.4px;background:#1c1c1c;margin:11px 0 15px}
-section{margin-bottom:15px}
-.secthead{font-weight:700;text-transform:uppercase;letter-spacing:.14em;font-size:9.5px;padding-bottom:3px;margin-bottom:8px;border-bottom:1px solid #1c1c1c}
+section{margin-bottom:20px}
+.secthead{font-weight:700;text-transform:uppercase;letter-spacing:.19em;font-size:10px;padding-bottom:4px;margin-bottom:10px;border-bottom:1.6px solid #181818}
 .entry{display:grid;grid-template-columns:58px 1fr;column-gap:13px;margin-bottom:9px}
 .left{font-family:"IBM Plex Mono",monospace;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding-top:2px;line-height:1.5;color:#181818}
 .dt{color:#181818;font-weight:700}
@@ -1115,10 +1095,11 @@ function buildPdf(){
     const ents = s.kind === "list" ? null : visEntries(s);
     if((listItems && !listItems.length) || (ents && !ents.length)) continue;
 
+    y += 6;
     need(34);
-    setF("bold", 9.5);
-    doc.text((s.title || "").toUpperCase(), M, y, { charSpace:1.5 });
-    y += 4.5; doc.setLineWidth(0.6); doc.line(M, y, RIGHT, y); y += 13;
+    setF("bold", 10);
+    doc.text((s.title || "").toUpperCase(), M, y, { charSpace:1.9 });
+    y += 5; doc.setLineWidth(1.1); doc.line(M, y, RIGHT, y); y += 13;
 
     if(listItems){
       setF("normal", 9);
