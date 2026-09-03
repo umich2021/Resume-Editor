@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Résumé Studio</title>
-<meta name="description" content="A résumé editor and creator in the University of Michigan Ross format. Import an existing résumé, edit every section, toggle what shows per role, and export to PDF, HTML, or plain text — entirely in your browser.">
+<meta name="description" content="A résumé editor and creator in the University of Michigan Ross format. Import an existing résumé, edit every section, toggle what shows per role, preview page breaks, and export to PDF/HTML — entirely in your browser.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;450;500;600&family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
@@ -31,6 +31,7 @@
     <div class="saveflag" id="saveflag"><i></i><span>Saved</span></div>
     <div class="tools">
       <button class="btn" id="importBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span class="lbl">Import</span></button>
+      <button class="btn" id="previewBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg><span class="lbl">Preview PDF</span></button>
       <button class="btn" id="exportBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V8M7 13l5-5 5 5"/><path d="M5 3h14"/></svg><span class="lbl">Export</span></button>
       <button class="btn" id="printBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg><span class="lbl">Print</span></button>
       <button class="btn icon" id="themeBtn" title="Toggle theme" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9c-4 0-9-4-9-9Z"/></svg></button>
@@ -74,6 +75,22 @@
   </div>
 </div>
 
+<div class="modal" id="pdfPreview" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="pdfPvTitle" style="max-width:680px">
+    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px">
+      <h3 id="pdfPvTitle">PDF preview</h3>
+      <span id="pdfMeta" class="lede" style="margin:0"></span>
+    </div>
+    <p class="lede" style="margin:0 0 12px">Exactly what the downloaded <b>.pdf</b> will contain — line wraps and page breaks included.</p>
+    <p class="msg" id="pdfWarn" hidden style="color:var(--maize)">Runs past one page. Ross résumés are expected to fit on one — hide bullet points or entries to trim.</p>
+    <div id="pdfPages" class="pdf-pages" aria-live="polite"></div>
+    <div class="dialog-foot">
+      <button class="btn" id="pdfClose">Close</button>
+      <button class="btn primary" id="pdfDownload">Download PDF</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="docsModal" hidden>
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="docsTitle" style="max-width:480px">
     <div style="display:flex; align-items:center; justify-content:space-between; gap:12px">
@@ -92,10 +109,11 @@
 <div class="modal" id="exportModal" hidden>
   <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="exTitle" style="max-width:420px">
     <h3 id="exTitle">Export résumé</h3>
-    <p class="lede">Save a copy to your device.</p>
+    <p class="lede">Reflects the current show/hide state. Preview first to check line wraps and page breaks.</p>
     <div class="grid">
-      <button class="btn primary" data-fmt="pdf">Résumé — <b style="font-weight:600">.pdf</b> (ready to send)</button>
-      <button class="btn" data-fmt="html">Résumé — <b style="font-weight:600">.html</b> (self-contained, printable)</button>
+      <button class="btn primary" id="exPreview">Preview PDF — see page breaks</button>
+      <button class="btn" data-fmt="pdf">Download <b style="font-weight:600">.pdf</b> (ready to send)</button>
+      <button class="btn" data-fmt="html">Download <b style="font-weight:600">.html</b> (self-contained, printable)</button>
       <button class="btn" data-fmt="txt">Plain text — <b style="font-weight:600">.txt</b></button>
       <button class="btn" data-fmt="md">Markdown — <b style="font-weight:600">.md</b></button>
       <button class="btn" data-fmt="json">Editable backup — <b style="font-weight:600">.json</b></button>

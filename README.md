@@ -41,6 +41,8 @@ Run it locally or host the static files anywhere; either way the privacy model i
   editing; add custom sections and skills lists.
 - **Personal website toggle** — off by default; flip it on to show a portfolio link on
   its own bold line (kept even when hidden).
+- **Preview PDF** — renders the actual generated PDF (via pdf.js) so you can see exactly
+  where lines wrap and pages break before downloading; warns if it runs past one page.
 - **Export** — `.pdf` (generated with [jsPDF](https://github.com/parallax/jsPDF), ready to
   send), `.html` (self-contained, print-ready), `.txt`, `.md`, `.json`. Every export
   reflects the current show/hide state. Or use **Print → Save as PDF** for the browser's

@@ -1127,6 +1127,35 @@ function triggerBlobDownload(blob, filename){
   }catch(e){ return false; }
 }
 
+let previewedDoc = null;
+async function previewPdf(){
+  const host = $("#pdfPages");
+  const doc = buildPdf();
+  if(!doc){ toast("PDF engine still loading — try again in a moment"); return; }
+  previewedDoc = doc;
+  $("#pdfPreview").hidden = false;
+  host.innerHTML = '<div class="ph">Rendering…</div>';
+  if(!window.pdfjsLib){ host.innerHTML = '<div class="ph">Preview needs the PDF library, which didn\'t load. Use “Download PDF”.</div>'; return; }
+  try{
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    const pdf = await pdfjsLib.getDocument({ data: doc.output("arraybuffer"), isEvalSupported:false }).promise;
+    host.innerHTML = "";
+    for(let p = 1; p <= pdf.numPages; p++){
+      const page = await pdf.getPage(p);
+      const vp = page.getViewport({ scale: 2 });
+      const cv = el("canvas");
+      cv.width = vp.width; cv.height = vp.height;
+      await page.render({ canvasContext: cv.getContext("2d"), viewport: vp }).promise;
+      host.append(cv);
+    }
+    $("#pdfMeta").textContent = pdf.numPages + (pdf.numPages === 1 ? " page" : " pages");
+    $("#pdfWarn").hidden = pdf.numPages <= 1;
+  }catch(e){
+    host.innerHTML = '<div class="ph">Couldn\'t render the preview here. “Download PDF” still works.</div>';
+    $("#pdfMeta").textContent = "";
+  }
+}
+
 async function saveFile(filename, data, mime){
   const blob = data instanceof Blob ? data : new Blob([data], { type: mime || "text/plain" });
   if(!downloads && window.claude && claude.use){ try{ downloads = await claude.use("downloads"); }catch(e){} }
@@ -1173,6 +1202,19 @@ $("#exportBtn").onclick = () => {
 $("#exCancel").onclick = () => exModal.hidden = true;
 exModal.addEventListener("click", e => { if(e.target === exModal) exModal.hidden = true; });
 exModal.querySelectorAll("[data-fmt]").forEach(b => b.onclick = () => doExport(b.dataset.fmt));
+$("#exPreview").onclick = () => { exModal.hidden = true; previewPdf(); };
+
+/* ---------------- pdf preview ---------------- */
+const pdfModal = $("#pdfPreview");
+$("#previewBtn").onclick = () => previewPdf();
+$("#pdfClose").onclick = () => { pdfModal.hidden = true; $("#pdfPages").innerHTML = ""; };
+$("#pdfDownload").onclick = async () => {
+  const doc = previewedDoc || buildPdf();
+  if(!doc){ toast("PDF engine still loading"); return; }
+  await saveFile(slug() + "-resume.pdf", doc.output("blob"), "application/pdf");
+  pdfModal.hidden = true; $("#pdfPages").innerHTML = "";
+};
+pdfModal.addEventListener("click", e => { if(e.target === pdfModal){ pdfModal.hidden = true; $("#pdfPages").innerHTML = ""; } });
 
 /* ---------------- my résumés ---------------- */
 const docsModal = $("#docsModal");
@@ -1218,6 +1260,7 @@ window.addEventListener("keydown", e => {
     if(!modal.hidden) closeImport();
     if(!exModal.hidden) exModal.hidden = true;
     if(!docsModal.hidden) docsModal.hidden = true;
+    if(!pdfModal.hidden){ pdfModal.hidden = true; $("#pdfPages").innerHTML = ""; }
   }
 });
 
