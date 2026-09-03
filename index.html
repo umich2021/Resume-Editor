@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Résumé Studio</title>
+<meta name="description" content="A résumé editor and creator in the University of Michigan Ross format. Import an existing résumé, edit every section, and export to PDF, HTML, or plain text.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;450;500;600&family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="shell">
+  <div class="appbar">
+    <div class="brand">
+      <div class="mark" aria-hidden="true"></div>
+      <b>Résumé Studio</b><span>editor</span>
+    </div>
+    <div class="viewtoggle" role="tablist" aria-label="View">
+      <button id="vEdit" class="on">Edit</button>
+      <button id="vPrev">Preview</button>
+    </div>
+    <div class="saveflag" id="saveflag"><i></i><span>Saved</span></div>
+    <div class="tools">
+      <button class="btn" id="importBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v13M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span class="lbl">Import</span></button>
+      <button class="btn" id="exportBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V8M7 13l5-5 5 5"/><path d="M5 3h14"/></svg><span class="lbl">Export</span></button>
+      <button class="btn" id="printBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="7"/></svg><span class="lbl">Print</span></button>
+      <button class="btn icon" id="themeBtn" title="Toggle theme" aria-label="Toggle theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 9 9c-4 0-9-4-9-9Z"/></svg></button>
+    </div>
+  </div>
+
+  <div class="workspace">
+    <div class="editor" id="editor"><div class="editor-inner" id="editorInner"></div></div>
+    <div class="preview" id="preview"><div class="sheet" id="sheet"></div></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal" id="modal" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <h3 id="dlgTitle">Start a résumé</h3>
+    <p class="lede">Bring in an existing résumé — we'll pull out your contact details, education, and experience and drop them into the editor to refine — or begin from a blank outline and build it up.</p>
+    <div class="tabs">
+      <button id="tabPaste" class="on">Paste text</button>
+      <button id="tabPdf">Upload PDF</button>
+    </div>
+    <div class="pane" id="panePaste">
+      <textarea class="paste" id="pasteArea" placeholder="Paste the full text of your résumé here…"></textarea>
+    </div>
+    <div class="pane" id="panePdf" hidden>
+      <label class="drop" id="drop">
+        <b>Drop a PDF here</b> or click to choose a file<br>
+        <span id="dropNote">Text is read in your browser — nothing is uploaded.</span>
+        <input type="file" id="fileInput" accept="application/pdf,.pdf">
+      </label>
+    </div>
+    <div class="found" id="found" hidden></div>
+    <div class="msg" id="msg" hidden></div>
+    <div class="dialog-foot">
+      <button class="btn" id="startBlank" style="margin-right:auto">Start blank</button>
+      <button class="btn" id="cancelImport">Cancel</button>
+      <button class="btn" id="parseBtn">Scan résumé</button>
+      <button class="btn primary" id="applyBtn" hidden>Replace résumé</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="exportModal" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="exTitle" style="max-width:420px">
+    <h3 id="exTitle">Export résumé</h3>
+    <p class="lede">Save a copy to your device.</p>
+    <div class="grid">
+      <button class="btn primary" data-fmt="pdf">Résumé — <b style="font-weight:600">.pdf</b> (ready to send)</button>
+      <button class="btn" data-fmt="html">Résumé — <b style="font-weight:600">.html</b> (self-contained, printable)</button>
+      <button class="btn" data-fmt="txt">Plain text — <b style="font-weight:600">.txt</b></button>
+      <button class="btn" data-fmt="md">Markdown — <b style="font-weight:600">.md</b></button>
+      <button class="btn" data-fmt="json">Editable backup — <b style="font-weight:600">.json</b></button>
+    </div>
+    <p class="lede" id="exNote" style="margin:14px 0 0; font-size:11.5px"></p>
+    <div class="dialog-foot">
+      <button class="btn" id="exCancel">Close</button>
+    </div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
