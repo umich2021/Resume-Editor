@@ -552,60 +552,104 @@ function contactLine(){
   return frag;
 }
 
-function renderPreview(){
-  const sheet = $("#sheet");
-  sheet.innerHTML = "";
-  sheet.append(el("div", { class:"r-name", text: state.name || "Your Name" }));
-  const c = el("div", { class:"r-contact" }); c.append(contactLine()); sheet.append(c);
-  if(siteShown()) sheet.append(el("div", { class:"r-site", text: siteStr() }));
-  sheet.append(el("div", { class:"r-rule" }));
+function entryEl(entry, edu){
+  const left = el("div", { class:"r-left" });
+  if((entry.date || "").trim()) left.append(el("div", { class:"r-date", text: entry.date.trim() }));
+  const body = el("div", { class:"r-body" });
+  body.append(el("div", { class:"r-orgrow" },
+    el("span", { class:"r-org", text: (entry.org || "").trim() || "—" }),
+    (entry.location || "").trim() ? el("span", { class:"r-loc", text: entry.location.trim() }) : null));
+  if((entry.subtitle || "").trim())
+    body.append(el("div", { class: edu ? "r-sub-b" : "r-sub-i", text: entry.subtitle.trim() }));
+  if((entry.extra || "").trim())
+    body.append(el("div", { class:"r-extra", text: entry.extra.trim() }));
+  const items = entry.bullets.filter(b => b.on !== false).map(b => b.text.trim()).filter(Boolean);
+  if(items.length){
+    const ul = el("ul", { class:"r-ul" });
+    items.forEach(b => ul.append(el("li", { text: b })));
+    body.append(ul);
+  }
+  return el("div", { class:"r-entry" }, left, body);
+}
+
+// break the résumé into atomic blocks that a page break may fall between
+function buildUnits(){
+  const units = [];
+  const head = el("div", { class:"u-head" });
+  head.append(el("div", { class:"r-name", text: state.name || "Your Name" }));
+  const c = el("div", { class:"r-contact" }); c.append(contactLine()); head.append(c);
+  if(siteShown()) head.append(el("div", { class:"r-site", text: siteStr() }));
+  head.append(el("div", { class:"r-rule" }));
+  units.push(head);
 
   state.sections.filter(sec => sec.on !== false).forEach(sec => {
-    const wrap = el("div", { class:"r-section" });
     const edu = /EDUC/i.test(sec.title);
-    wrap.append(el("div", { class:"r-secthead", text: sec.title || "SECTION" }));
+    const header = () => el("div", { class:"r-secthead", text: sec.title || "SECTION" });
 
     if(sec.kind === "list"){
       const items = sec.bullets.filter(b => b.on !== false).map(b => b.text.trim()).filter(Boolean);
-      const body = el("div", { class:"r-listbody" });
+      const u = el("div", { class:"u-sec" }, header());
       if(items.length){
         const ul = el("ul", { class:"r-ul" });
         items.forEach(b => ul.append(el("li", { text: b })));
-        body.append(ul);
-      }else body.append(el("div", { class:"r-empty", text:"No items shown" }));
-      wrap.append(body);
-      sheet.append(wrap);
+        u.append(ul);
+      }else u.append(el("div", { class:"r-empty", text:"No items shown" }));
+      units.push(u);
       return;
     }
 
     const ents = sec.entries.filter(e => e.on !== false);
     if(!ents.length){
-      wrap.append(el("div", { class:"r-empty", text: sec.entries.length ? "All entries hidden" : "No entries yet" }));
-      sheet.append(wrap);
+      units.push(el("div", { class:"u-sec" }, header(),
+        el("div", { class:"r-empty", text: sec.entries.length ? "All entries hidden" : "No entries yet" })));
       return;
     }
+    // section header stays with its first entry; later entries can flow onto the next page
+    units.push(el("div", { class:"u-sec" }, header(), entryEl(ents[0], edu)));
+    ents.slice(1).forEach(entry => units.push(el("div", { class:"u-entry" }, entryEl(entry, edu))));
+  });
+  return units;
+}
 
-    ents.forEach(entry => {
-      const left = el("div", { class:"r-left" });
-      if((entry.date || "").trim()) left.append(el("div", { class:"r-date", text: entry.date.trim() }));
+function renderPreview(){
+  const host = $("#pages");
+  host.innerHTML = "";
 
-      const body = el("div", { class:"r-body" });
-      body.append(el("div", { class:"r-orgrow" },
-        el("span", { class:"r-org", text: (entry.org || "").trim() || "—" }),
-        (entry.location || "").trim() ? el("span", { class:"r-loc", text: entry.location.trim() }) : null));
-      if((entry.subtitle || "").trim())
-        body.append(el("div", { class: edu ? "r-sub-b" : "r-sub-i", text: entry.subtitle.trim() }));
-      if((entry.extra || "").trim())
-        body.append(el("div", { class:"r-extra", text: entry.extra.trim() }));
-      const items = entry.bullets.filter(b => b.on !== false).map(b => b.text.trim()).filter(Boolean);
-      if(items.length){
-        const ul = el("ul", { class:"r-ul" });
-        items.forEach(b => ul.append(el("li", { text: b })));
-        body.append(ul);
-      }
-      wrap.append(el("div", { class:"r-entry" }, left, body));
-    });
-    sheet.append(wrap);
+  let w = host.clientWidth;
+  if(!w || w < 60) w = Math.min(760, (window.innerWidth || 900) - 52);
+  const ph = w * 11 / 8.5;
+  host.style.setProperty("--ph", ph + "px");
+
+  const probe = el("div", { class:"sheet", style:"visibility:hidden;position:absolute" });
+  probe.append(el("div", { class:"page-body" }));
+  host.append(probe);
+  const cs = getComputedStyle(probe);
+  // 0.985 keeps a hair of slack so a screen page never spills onto an extra printed page
+  const usable = (probe.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)) * 0.985;
+  host.removeChild(probe);
+
+  const pages = [];
+  let body = null;
+  const newPage = () => {
+    const p = el("div", { class:"sheet" });
+    body = el("div", { class:"page-body" });
+    p.append(body); host.append(p); pages.push(p);
+  };
+  newPage();
+
+  buildUnits().forEach(u => {
+    body.append(u);
+    if(body.scrollHeight > usable + 1 && body.childElementCount > 1){
+      body.removeChild(u);
+      newPage();
+      body.append(u);
+    }
+  });
+
+  pages.forEach((p, i) => {
+    const pb = p.firstChild;
+    if(pb.scrollHeight > usable + 1) p.classList.add("page-over");
+    p.append(el("div", { class:"page-num", text: pages.length > 1 ? `${i + 1} / ${pages.length}` : "" }));
   });
 }
 
@@ -759,9 +803,27 @@ function parseResume(raw){
   return out;
 }
 
+// pdf.js needs a worker; a cross-origin CDN worker can't be constructed directly,
+// so fetch it once and hand pdf.js a same-origin blob URL (falls back to the CDN URL).
+let _pdfjsReady;
+async function ensurePdfjs(){
+  if(!window.pdfjsLib) return false;
+  if(!_pdfjsReady) _pdfjsReady = (async () => {
+    const u = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    try{
+      const r = await fetch(u);
+      if(!r.ok) throw 0;
+      pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(await r.blob());
+    }catch(e){
+      pdfjsLib.GlobalWorkerOptions.workerSrc = u;
+    }
+  })();
+  await _pdfjsReady;
+  return true;
+}
+
 async function pdfToText(file){
-  if(!window.pdfjsLib) throw new Error("no-pdfjs");
-  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  if(!(await ensurePdfjs())) throw new Error("no-pdfjs");
   const data = new Uint8Array(await file.arrayBuffer());
   const pdf = await pdfjsLib.getDocument({ data, isEvalSupported:false }).promise;
   const outLines = [];
@@ -1034,7 +1096,7 @@ section{margin-bottom:15px}
 .loc{font-weight:700;font-size:8.6px;white-space:nowrap;margin-left:auto}
 .subi{font-style:italic;margin-top:1.5px} .subb{font-weight:700;margin-top:1.5px}
 ul{margin:3px 0 0;padding-left:15px} li{margin-bottom:2.5px;padding-left:3px}
-@media print{body{background:#fff}.sheet{margin:0;max-width:none;box-shadow:none;padding:0}@page{margin:.5in}}
+@media print{body{background:#fff}.sheet{margin:0;max-width:none;box-shadow:none;padding:.5in .55in}@page{margin:0}}
 </style></head><body><div class="sheet">${body}</div></body></html>`;
 }
 
@@ -1135,9 +1197,8 @@ async function previewPdf(){
   previewedDoc = doc;
   $("#pdfPreview").hidden = false;
   host.innerHTML = '<div class="ph">Rendering…</div>';
-  if(!window.pdfjsLib){ host.innerHTML = '<div class="ph">Preview needs the PDF library, which didn\'t load. Use “Download PDF”.</div>'; return; }
+  if(!(await ensurePdfjs())){ host.innerHTML = '<div class="ph">Preview needs the PDF library, which didn\'t load. Use “Download PDF”.</div>'; return; }
   try{
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
     const pdf = await pdfjsLib.getDocument({ data: doc.output("arraybuffer"), isEvalSupported:false }).promise;
     host.innerHTML = "";
     for(let p = 1; p <= pdf.numPages; p++){
@@ -1224,7 +1285,7 @@ $("#newDocBtn").onclick = () => newDoc();
 docsModal.addEventListener("click", e => { if(e.target === docsModal) docsModal.hidden = true; });
 
 /* ---------------- misc wiring ---------------- */
-$("#printBtn").onclick = () => window.print();
+$("#printBtn").onclick = () => { renderPreview(); setTimeout(() => window.print(), 80); };
 
 let toastTimer;
 function toast(msg){
@@ -1253,7 +1314,10 @@ $("#themeBtn").onclick = () => {
 const bodyEl = document.body;
 bodyEl.setAttribute("data-view", "edit");
 $("#vEdit").onclick = () => { bodyEl.setAttribute("data-view", "edit"); $("#vEdit").classList.add("on"); $("#vPrev").classList.remove("on"); growAll(); };
-$("#vPrev").onclick = () => { bodyEl.setAttribute("data-view", "preview"); $("#vPrev").classList.add("on"); $("#vEdit").classList.remove("on"); };
+$("#vPrev").onclick = () => { bodyEl.setAttribute("data-view", "preview"); $("#vPrev").classList.add("on"); $("#vEdit").classList.remove("on"); renderPreview(); };
+
+let _rz;
+window.addEventListener("resize", () => { clearTimeout(_rz); _rz = setTimeout(renderPreview, 180); });
 
 window.addEventListener("keydown", e => {
   if(e.key === "Escape"){

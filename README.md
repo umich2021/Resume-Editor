@@ -19,8 +19,9 @@ Run it locally or host the static files anywhere; either way the privacy model i
 
 ## Features
 
-- **Live two-pane editor** — forms on the left, a black-on-white letter-size sheet on the
-  right that updates as you type.
+- **Live two-pane editor** — forms on the left; on the right, the résumé laid out as actual
+  US-Letter pages that repaginate as you type, so you can see where it breaks onto a second
+  page (and a red outline warns when a page overflows). Ross résumés are expected to fit one.
 - **Include / exclude anything** — a checkbox on every section, every entry, and every
   bullet point controls whether it appears on the résumé. Uncheck what a given role
   doesn't need; the item stays in your document, just hidden from the output. This is the

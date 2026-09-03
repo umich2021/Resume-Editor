@@ -246,31 +246,44 @@ select{appearance:none; background-image:linear-gradient(45deg,transparent 50%,v
 .site-row .duo3{display:grid; grid-template-columns:1fr 1fr; gap:6px}
 
 /* ---------- preview ---------- */
-.preview{overflow:auto; background:var(--ground); padding:26px; display:flex; justify-content:center; align-items:flex-start}
-/* The sheet is a printed page: always black on white, regardless of app theme. */
+.preview{overflow:auto; background:var(--ground); padding:26px 26px 40px; display:flex; justify-content:center; align-items:flex-start}
+.pages{display:flex; flex-direction:column; align-items:center; gap:26px; width:min(760px,100%)}
+/* Each .sheet is one printed US-Letter page: always black on white, regardless of app theme. */
 .sheet{
   --pk:#181818; --pk-muted:#464646; --pk-faint:#8b8b8b; --pk-rule:#1c1c1c;
-  width:min(760px, 100%);
+  position:relative;
+  width:100%; height:var(--ph, 983px);
   background:#ffffff; color:var(--pk);
   box-shadow:var(--shadow);
   border-radius:2px;
-  padding:44px 50px 52px;
+  padding:46px 52px 50px;
   font-family:"Source Serif 4", Georgia, "Times New Roman", serif;
   font-size:10px; line-height:1.42;
 }
+.sheet.page-over{ height:auto; min-height:var(--ph, 983px) }
+.page-body{overflow:visible}
+.page-body > *{margin:0}
+.u-head{margin-bottom:14px}
+.u-sec{margin-top:15px; margin-bottom:9px}
+.page-body > .u-sec:first-child{margin-top:0}
+.u-sec .r-entry{margin-bottom:0}
+.u-entry{margin-bottom:9px}
+.page-num{
+  position:absolute; right:12px; bottom:9px;
+  font:600 7px/1 "IBM Plex Mono", monospace; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--pk-faint); font-variant-numeric:tabular-nums;
+}
+.page-over{ outline:1.5px solid var(--danger); outline-offset:-1px }
+.page-over .page-num{ color:var(--danger) }
 .r-name{text-align:center; font-weight:700; font-size:15.5px; letter-spacing:.15em; text-transform:uppercase; text-wrap:balance}
 .r-contact{text-align:center; font-size:9px; color:var(--pk-muted); margin-top:5px; letter-spacing:.03em}
 .r-contact .sep{color:var(--pk-faint); margin:0 5px}
 .r-site{text-align:center; font-size:9.3px; font-weight:700; letter-spacing:.04em; margin-top:3px}
-.r-rule{height:1.4px; background:var(--pk-rule); margin:11px 0 15px}
-.r-section{margin-bottom:15px}
-.r-section:last-child{margin-bottom:0}
+.r-rule{height:1.4px; background:var(--pk-rule); margin:11px 0 0}
 .r-secthead{font-weight:700; text-transform:uppercase; letter-spacing:.14em; font-size:9.5px; padding-bottom:3px; margin-bottom:8px; border-bottom:1px solid var(--pk-rule)}
-.r-entry{display:grid; grid-template-columns:58px 1fr; column-gap:13px; margin-bottom:9px}
-.r-entry:last-child{margin-bottom:0}
+.r-entry{display:grid; grid-template-columns:58px 1fr; column-gap:13px}
 .r-left{font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:7.8px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding-top:2px; line-height:1.5; color:var(--pk)}
 .r-date{color:var(--pk); font-weight:700; font-variant-numeric:tabular-nums}
-.r-listbody{padding-left:1px}
 .r-body > *{margin:0}
 .r-orgrow{display:flex; justify-content:space-between; gap:4px 14px; align-items:baseline; flex-wrap:wrap}
 .r-org{font-weight:700; text-transform:uppercase; letter-spacing:.035em; font-size:10px}
@@ -352,10 +365,22 @@ select{appearance:none; background-image:linear-gradient(45deg,transparent 50%,v
 }
 
 @media print{
-  :root{ --paper:#fff; --ground:#fff; --ink:#0b0b0b; --muted:#333; --faint:#666; --line:#999 }
+  :root{ --ground:#fff }
   .appbar,.editor,.viewtoggle,.toast,.modal{display:none!important}
   .shell,.workspace,.preview{display:block!important; height:auto!important; min-height:0!important; overflow:visible!important}
   .preview{padding:0!important; background:#fff!important}
-  .sheet{box-shadow:none!important; width:100%!important; max-width:none!important; padding:0!important; font-size:10.2px}
-  @page{margin:0.5in}
+  .pages{display:block!important; width:auto!important; gap:0!important}
+  .sheet{
+    box-shadow:none!important; border-radius:0!important;
+    width:100%!important; height:auto!important; min-height:0!important; overflow:visible!important;
+    padding:0.5in 0.55in !important;
+    break-after:page; page-break-after:always;
+  }
+  .sheet:last-child{ break-after:auto; page-break-after:avoid }
+  .page-body{ height:auto!important; overflow:visible!important }
+  .u-sec, .u-entry, .r-entry{ break-inside:avoid }
+  .page-num{ display:none!important }
+  .page-over{ outline:none!important }
+  /* @page margin 0 makes Chrome/Edge omit the browser's date/URL/page-number header & footer */
+  @page{ margin:0 }
 }
